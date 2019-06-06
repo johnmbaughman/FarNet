@@ -1,17 +1,15 @@
 ﻿module FSharpFar.Editor
 open FarNet
-open Config
-open Session
 open System
 open System.IO
-open Microsoft.FSharp.Compiler.SourceCodeServices
-open Microsoft.FSharp.Compiler
+open FSharp.Compiler.SourceCodeServices
+open FSharp.Compiler
 
 let load (editor: IEditor) =
     editor.Save ()
 
     let file = editor.FileName
-    let ses = Session.GetOrCreate (getConfigPathForFile file)
+    let ses = Session.GetOrCreate (Config.defaultFileForFile file)
     let temp = far.TempName "F#"
 
     do
@@ -22,7 +20,7 @@ let load (editor: IEditor) =
             writer.Write ses.Errors
 
         // eval anyway, session errors may be warnings
-        doEval writer (fun _ -> ses.EvalScript (writer, file))
+        Session.Eval (writer, fun () -> ses.EvalScript (writer, file))
 
     showTempFile temp "F# Output"
 
@@ -33,17 +31,24 @@ let showErrors (editor: IEditor) =
 
     let menu = far.CreateListMenu (Title = "F# errors", ShowAmpersands = true, UsualMargins = true, IncrementalOptions = PatternOptions.Substring)
 
-    errors |> menu.ShowItems strErrorLine (fun error ->
+    errors |> menu.ShowItems FSharpErrorInfo.strErrorLine (fun error ->
         editor.GoTo (error.StartColumn, error.StartLineAlternate - 1)
         editor.Redraw ()
     )
+
+let sourceText (editor: IEditor) =
+    let n = editor.Count
+    let lines = Array.zeroCreate n
+    for i in 0 .. n - 1 do
+        lines.[i] <- editor.[i].Text
+    SourceText.ofLines lines
 
 let check (editor: IEditor) =
     use progress = new Progress "Checking..."
 
     let config = editor.MyConfig ()
     let file = editor.FileName
-    let text = editor.GetText ()
+    let text = sourceText editor
 
     let check =
         Checker.check file text config
@@ -72,7 +77,7 @@ let tips (editor: IEditor) =
 
     let config = editor.MyConfig ()
     let file = editor.FileName
-    let text = editor.GetText ()
+    let text = sourceText editor
 
     let tip =
         async {
@@ -97,22 +102,19 @@ let usesInFile (editor: IEditor) =
 
     let config = editor.MyConfig ()
     let file = editor.FileName
-    let text = editor.GetText ()
+    let text = sourceText editor
 
-    let uses =
-        async {
-            let! check = Checker.check file text config
-            let! symboluse = check.CheckResults.GetSymbolUseAtLocation (caret.Y + 1, col + 1, lineStr, identIsland)
-            match symboluse with
-            | None ->
-                return None
-            | Some symboluse ->
-                let! uses = check.CheckResults.GetUsesOfSymbolInFile symboluse.Symbol
-                return Some uses
-        }
-        |> Async.RunSynchronously
-
-    match uses with
+    async {
+        let! check = Checker.check file text config
+        match! check.CheckResults.GetSymbolUseAtLocation (caret.Y + 1, col + 1, lineStr, identIsland) with
+        | None ->
+            return None
+        | Some symboluse ->
+            let! uses = check.CheckResults.GetUsesOfSymbolInFile symboluse.Symbol
+            return Some uses
+    }
+    |> Async.RunSynchronously
+    |> function
     | None -> ()
     | Some uses ->
 
@@ -144,23 +146,20 @@ let usesInProject (editor: IEditor) =
 
     let config = editor.MyConfig ()
     let file = editor.FileName
-    let text = editor.GetText ()
+    let text = sourceText editor
 
-    let uses =
-        async {
-            let! check = Checker.check file text config
-            let! sym = check.CheckResults.GetSymbolUseAtLocation (caret.Y + 1, col + 1, lineStr, identIsland)
-            match sym with
-            | None ->
-                return None
-            | Some sym ->
-                let! pr = check.Checker.ParseAndCheckProject check.Options
-                let! uses = pr.GetUsesOfSymbol sym.Symbol
-                return Some (uses, sym)
-        }
-        |> Async.RunSynchronously
-
-    match uses with
+    async {
+        let! check = Checker.check file text config
+        match! check.CheckResults.GetSymbolUseAtLocation (caret.Y + 1, col + 1, lineStr, identIsland) with
+        | None ->
+            return None
+        | Some sym ->
+            let! pr = check.Checker.ParseAndCheckProject check.Options
+            let! uses = pr.GetUsesOfSymbol sym.Symbol
+            return Some (uses, sym)
+    }
+    |> Async.RunSynchronously
+    |> function
     | None -> ()
     | Some (uses, sym) ->
 
@@ -187,11 +186,9 @@ let toggleAutoTips (editor: IEditor) =
 let toggleAutoCheck (editor: IEditor) =
     editor.MyAutoCheck <- not editor.MyAutoCheck
 
-(*
-    https://fsharp.github.io/FSharp.Compiler.Service/editor.html#Getting-auto-complete-lists
-    old EditorTests.fs(265) they use [], "" instead of names, so do we.
-    new Use FsAutoComplete way.
-*)
+// https://fsharp.github.io/FSharp.Compiler.Service/editor.html#Getting-auto-complete-lists
+// old EditorTests.fs(265) they use [], "" instead of names, so do we.
+// new Use FsAutoComplete way.
 let complete (editor: IEditor) =
     use progress = new Progress "Checking..."
 
@@ -208,7 +205,7 @@ let complete (editor: IEditor) =
     else
     let config = editor.MyConfig ()
     let file = editor.FileName
-    let text = editor.GetText ()
+    let text = sourceText editor
 
     // parse
     //! `index` is the last char index, not cursor index

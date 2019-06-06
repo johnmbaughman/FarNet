@@ -1,8 +1,7 @@
 ﻿namespace FSharpFar
 open FarNet
 open FarNet.FSharp
-open Session
-open Microsoft.FSharp.Compiler.SourceCodeServices
+open FSharp.Compiler.SourceCodeServices
 open System
 
 type LineArgs = {
@@ -15,8 +14,8 @@ type MouseMessage =
 | Noop
 | Move of LineArgs
 
-[<System.Runtime.InteropServices.Guid "B7916B53-2C17-4086-8F13-5FFCF0D82900">]
 [<ModuleEditor (Name = "FSharpFar", Mask = "*.fs;*.fsx;*.fsscript")>]
+[<Guid "B7916B53-2C17-4086-8F13-5FFCF0D82900">]
 type FarEditor () =
     inherit ModuleEditor ()
     let mutable editor: IEditor = null
@@ -36,7 +35,7 @@ type FarEditor () =
             do! Async.Sleep 1000
             if inbox.CurrentQueueLength > 0 then () else
 
-            let! text = jobEditor editor.GetText
+            let! text = jobEditor (fun () -> Editor.sourceText editor)
             try
                 let config = editor.MyConfig ()
                 let! check = Checker.check editor.FileName text config
@@ -73,7 +72,7 @@ type FarEditor () =
                             it.Index <= err.EndLineAlternate - 1 &&
                             (it.Index > err.StartLineAlternate - 1 || it.Column >= err.StartColumn) &&
                             (it.Index < err.EndLineAlternate - 1 || it.Column <= err.EndColumn))
-                        |> Array.map strErrorText
+                        |> Array.map FSharpErrorInfo.strErrorText
                         |> Array.distinct
                     if lines.Length > 0 then
                         autoTips <- false
@@ -84,10 +83,10 @@ type FarEditor () =
                     match Parser.findLongIdents it.Column it.Text with
                     | None -> ()
                     | Some (column, idents) ->
-                        let! fileText = jobEditor editor.GetText
+                        let! text = jobEditor (fun () -> Editor.sourceText editor)
                         try
                             let config = editor.MyConfig ()
-                            let! check = Checker.check editor.FileName fileText config
+                            let! check = Checker.check editor.FileName text config
                             let! tip = check.CheckResults.GetToolTipText (it.Index + 1, column + 1, it.Text, idents, FSharpTokenTag.Identifier)
                             let tips = Tips.format tip false
                             if tips.Length > 0 && inbox.CurrentQueueLength = 0 then
@@ -110,6 +109,9 @@ type FarEditor () =
                 match e.Key.VirtualKeyCode with
                 | KeyCode.Tab when e.Key.Is () && not editor.SelectionExists ->
                      e.Ignore <- Editor.complete editor
+                | KeyCode.F5 when e.Key.Is () ->
+                     Editor.load editor
+                     e.Ignore <- true
                 | _ -> ()
 
             editor.Changed.Add <| fun e ->

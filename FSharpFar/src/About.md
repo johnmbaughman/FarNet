@@ -1,5 +1,21 @@
+### F# 4.6
 
+- [blog about 4.6](https://blogs.msdn.microsoft.com/dotnet/2019/01/24/announcing-f-4-6-preview/)
+- [my reddit](https://www.reddit.com/r/fsharp/comments/ajj430/announcing_f_46_preview/)
+- [my FSCS issue](https://github.com/fsharp/FSharp.Compiler.Service/issues/884)
+
+***
+### FSharp.Core assembly and package versions
+
+Versions are different, 2019-02-02:
+
+- Assembly version is 4.6.0. This version must be in `Far.exe.config`.
+- Package version is 4.6.1 and it may change further.
+
+***
 ### FSharpFar.fs.ini and module FSharpFar.X
+
+UPDATE: We retired `Convert-Project.ps1`, so the problem is no more.
 
 If we use `Convert-Project.ps1` to make `FSharpFar.fs.ini` then
 some files works fine, some fail with
@@ -22,7 +38,6 @@ But it is legal and VS compiles.
 It looks like an FCS bug.
 
 ***
-
 ### Editor flow notes
 
 Why `post ... Open`. In modal windows `Open` blocks and the job code after
@@ -43,22 +58,39 @@ wait in Far code.
 
 Next step. The waiter waits.
 
+***
 ### fsi object
 
-The bad.
+**The bad.**
+
 [This](https://fsharp.github.io/FSharp.Compiler.Service/interactive.html) tells how to enable `fsi` in a session.
 It does not tell that *FSharp.Compiler.Interactive.Settings.dll* from *Microsoft SDKs* should be packaged for this.
 If this DLL is not discovered, an app fails with not clear info.
 
-The good.
-For simple stuff like interactive settings this is not a must.
-See *repo\samples\fsi*.
-
-Related?
-
 - [692](https://github.com/fsharp/FSharp.Compiler.Service/issues/692)
 - [127](https://github.com/fsharp/FSharp.Compiler.Service/issues/127)
 
+In theory, we can make `fsi` available for scripts as
+
+```FSharp
+/// FSharpFar utilities available right away.
+[<AutoOpen>]
+module FSharpFarUtility
+/// Interactive settings.
+let fsi = FSharp.Compiler.Interactive.Shell.Settings.fsi
+```
+
+but this requires the reference to *FSharp.Compiler.Service*.
+We do not want this for all scripts.
+
+**The good.**
+
+This fine tuning is not often needed.
+When it is needed, a documented workaround exists, see *samples\fsi*.
+
+NB This object seems to be global, if we change data in one session then all sessions are affected.
+
+***
 ### System.Collections.Immutable and System.Reflection.Metadata
 
 They are used in `FSharp.Compiler.Service\src\absil`

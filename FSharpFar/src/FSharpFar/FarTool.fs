@@ -1,12 +1,18 @@
 ﻿namespace FSharpFar
 open FarNet
-open Session
 open FarInteractive
+open System.Diagnostics
 
-[<System.Runtime.InteropServices.Guid "65bd5625-769a-4253-8fde-ffcc3f72489d">]
 [<ModuleTool (Name = "FSharpFar", Options = ModuleToolOptions.F11Menus)>]
+[<Guid "65bd5625-769a-4253-8fde-ffcc3f72489d">]
 type FarTool () =
     inherit ModuleTool ()
+
+    let openSession () =
+        FarInteractive(Session.DefaultSession ()).Open ()
+
+    let openProject () =
+        Config.generateProject (Config.defaultFile ()) |> Process.Start |> ignore
 
     let showSessions () =
         let menu = far.CreateListMenu (Title = "F# sessions", Bottom = "Enter, Del, F4", ShowAmpersands = true, UsualMargins = true)
@@ -37,8 +43,10 @@ type FarTool () =
         let menu = far.CreateMenu (Title = "F#")
         menu.ShowActions [
             // all menus
-            yield "&1. Interactive", (fun _ -> FarInteractive(getMainSession ()).Open ())
+            yield "&1. Interactive", openSession
             yield "&0. Sessions...", showSessions
+            if e.From = ModuleToolOptions.Panels then
+                yield "&p. Project", openProject
             // editor with F#
             if e.From = ModuleToolOptions.Editor && isFSharpFileName editor.FileName then
                 // all F# files; load interactive, too, i.e. load header then type

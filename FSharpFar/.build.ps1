@@ -15,7 +15,6 @@ $ProjectName = "$ModuleName.fsproj"
 
 task Init Meta, {
 	exec {paket.exe install}
-	Remove-Item paket-files
 }
 
 task Kill Clean, {
@@ -27,8 +26,16 @@ task Kill Clean, {
 	)
 }
 
+# (@1) Use MSBuild to work around missed assembly version
+# see https://github.com/Microsoft/visualfsharp/issues/3113
 task Build {
-	exec {dotnet build $ProjectRoot\$ModuleName.sln /p:FarHome=$FarHome /p:Configuration=$Configuration /v:n}
+	# dotnet build misses version info (@1)
+	#exec {dotnet build $ProjectRoot\$ModuleName.sln /p:FarHome=$FarHome /p:Configuration=$Configuration /v:n}
+
+	# workaround (@1)
+	Set-Alias MSBuild (Resolve-MSBuild x86)
+	exec {dotnet restore $ProjectRoot\$ModuleName.sln}
+	exec {MSBuild $ProjectRoot\$ModuleName.sln /p:FarHome=$FarHome /p:Configuration=$Configuration /v:n}
 }
 
 task Clean {
@@ -56,7 +63,7 @@ task Meta -Inputs .build.ps1, History.txt -Outputs src/Directory.Build.props -Jo
 <Project>
 	<PropertyGroup>
 		<Company>https://github.com/nightroman/FarNet</Company>
-		<Copyright>Copyright (c) 2016-2018 Roman Kuzmin</Copyright>
+		<Copyright>Copyright (c) Roman Kuzmin</Copyright>
 		<Description>F# interactive, scripting, compiler, and editor services for Far Manager.</Description>
 		<Product>FarNet.FSharpFar</Product>
 		<Version>$Version</Version>
@@ -98,14 +105,12 @@ task Package Markdown, {
 	)
 }
 
+#! dotnet made assembly: FileVersion is null (@1); so we used this command:
+# ($dllVersion = [Reflection.Assembly]::ReflectionOnlyLoadFrom($dllPath).GetName().Version.ToString())
 task NuGet Package, Version, {
 	# test versions
 	$dllPath = "$FarHome\FarNet\Modules\$ModuleName\$ModuleName.dll"
-
-	#! dotnet made assembly: FileVersion is null
-	($dllVersion = [Reflection.Assembly]::ReflectionOnlyLoadFrom($dllPath).GetName().Version.ToString())
-	#($dllVersion = (Get-Item $dllPath).VersionInfo.FileVersion.ToString())
-
+	($dllVersion = (Get-Item $dllPath).VersionInfo.FileVersion.ToString())
 	assert $dllVersion.StartsWith($Version) 'Versions mismatch.'
 
 	$text = @'
@@ -130,7 +135,7 @@ https://raw.githubusercontent.com/nightroman/FarNet/master/Install-FarNet.en.txt
 		<owners>Roman Kuzmin</owners>
 		<projectUrl>https://github.com/nightroman/FarNet/tree/master/FSharpFar</projectUrl>
 		<iconUrl>https://raw.githubusercontent.com/wiki/nightroman/FarNet/images/FarNetLogo.png</iconUrl>
-		<licenseUrl>https://raw.githubusercontent.com/nightroman/FarNet/master/FSharpFar/LICENSE.txt</licenseUrl>
+		<license type="expression">BSD-3-Clause</license>
 		<requireLicenseAcceptance>false</requireLicenseAcceptance>
 		<summary>$text</summary>
 		<description>$text</description>

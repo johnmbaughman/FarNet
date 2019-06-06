@@ -10,18 +10,15 @@ let flowNormal = async {
     do! Job.FlowViewer viewer
 }
 let testNormal = async {
-    Job.Start flowNormal
-
-    do! test isViewer
+    Job.StartImmediate flowNormal
+    do! job { Assert.Viewer () }
     do! Job.Keys "Esc"
-
-    do! test isFarPanel
+    do! job { Assert.NativePanel () }
 }
 
 let flowModal = async {
     // dialog
-    Job.As showWideDialog
-    |> Job.Start
+    Job.StartImmediateFrom showWideDialog
 
     // viewer over the dialog
     let viewer = far.CreateViewer (FileName = __SOURCE_FILE__)
@@ -29,21 +26,23 @@ let flowModal = async {
     do! Job.FlowViewer viewer
 
     // OK when viewer closed
-    do! Job.As (fun () -> far.Message "OK")
+    do! job { far.Message "OK" }
 }
 let testModal = async {
-    Job.Start flowModal
-
-    do! test isViewer
+    Job.StartImmediate flowModal
+    do! job { Assert.Viewer () }
     do! Job.Keys "Esc"
 
-    do! test (isDialogText 1 "OK")
+    do! job {
+        Assert.Dialog ()
+        Assert.Equal ("OK", far.Dialog.[1].Text)
+    }
     do! Job.Keys "Esc"
 
-    do! test isWideDialog
+    do! job { Assert.True (isWideDialog ()) }
     do! Job.Keys "Esc"
 
-    do! test isFarPanel
+    do! job { Assert.NativePanel () }
 }
 
 let test = async {

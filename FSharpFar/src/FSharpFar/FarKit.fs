@@ -11,8 +11,17 @@ let farLocalData = far.GetModuleManager("FSharpFar").GetFolderPath (SpecialFolde
 /// The roming module folder path.
 let farRoaminData = far.GetModuleManager("FSharpFar").GetFolderPath (SpecialFolder.RoamingData, true)
 
-/// The config file path used for the main session and as the default for services.
-let farMainConfigPath = Path.Combine (farRoaminData, "main.fs.ini")
+/// The main session config file path used as the default for services.
+/// A new empty file is created if it does not exist.
+let farMainConfigPath =
+    let path = Path.Combine (farRoaminData, "main.fs.ini")
+    if not (File.Exists path) then
+        File.WriteAllText (path, "")
+    path
+
+/// Gets the internal current directory.
+let farCurrentDirectory () =
+    far.CurrentDirectory
 
 /// Default flags for checkers and sessions
 let defaultCompilerArgs =
@@ -24,80 +33,10 @@ let defaultCompilerArgs =
         "-r:" + dir + @"\FarNet\Modules\FSharpFar\FSharpFar.dll"
     ]
 
-type IAnyMenu with
-    /// Shows the menu of named actions.
-    /// items: label * action.
-    member menu.ShowActions (items: (string * (unit -> unit)) seq) =
-        menu.Items.Clear ()
-        for text, action in items do
-            (menu.Add text).Data <- action
-        if menu.Show () then
-            (menu.SelectedData :?> (unit -> unit)) ()
-
-    /// Shows the menu of items.
-    /// text: Called to get item text.
-    /// show: Called to process selected item.
-    member menu.ShowItems (text: 'Item -> string) (show: 'Item -> 'r) (items: 'Item seq) =
-        menu.Items.Clear ()
-        for item in items do
-            (menu.Add (text item)).Data <- item
-        if menu.Show () then
-            show (menu.SelectedData :?> 'Item)
-        else
-            Unchecked.defaultof<'r>
-
-    /// Shows the menu of items with keys.
-    /// text: Called to get item text.
-    /// show: Called to process selected item and key.
-    member menu.ShowItemsWithKeys (text: 'Item -> string) (show: 'Item -> KeyData -> 'r) (items: 'Item seq) =
-        menu.Items.Clear ()
-        for item in items do
-            (menu.Add (text item)).Data <- item
-        if menu.Show () && menu.Selected >= 0 then
-            show (menu.SelectedData :?> 'Item) menu.Key
-        else
-            Unchecked.defaultof<'r>
-
-/// Shows the progress info in the window title and the task bar.
-type Progress (title) as this =
-    static let mutable head = Option<Progress>.None
-
-    let oldWindowTitle = far.UI.WindowTitle
-    let tail = head
-    do
-        far.UI.SetProgressState TaskbarProgressBarState.Indeterminate
-        far.UI.WindowTitle <- title
-        head <- Some this
-
-    interface IDisposable with
-        member __.Dispose () =
-            head <- tail
-            far.UI.WindowTitle <- oldWindowTitle
-            if tail.IsNone then
-                far.UI.SetProgressState TaskbarProgressBarState.NoProgress
-
-    member __.Done() =
-        far.UI.SetProgressState TaskbarProgressBarState.NoProgress
-        far.UI.SetProgressFlash ()
-
-/// Gets the active file panel directory or None.
-let farTryPanelDirectory () =
-    let panel = far.Panel
-    if not (isNull panel) && panel.Kind = PanelKind.File && not panel.IsPlugin then
-        Some panel.CurrentDirectory
-    else
-        None
-
 /// Expands environment variables and makes the full path based on the active panel.
 let farResolvePath path =
-    let mutable path = Environment.ExpandEnvironmentVariables path
-    if not (Path.IsPathRooted path) then
-        match farTryPanelDirectory () with
-        | Some dir ->
-            path <- Path.Combine (dir, path)
-        | _ ->
-            ()
-    Path.GetFullPath path
+    let path = Environment.ExpandEnvironmentVariables path
+    Path.GetFullPath (if Path.IsPathRooted path then path else Path.Combine (far.CurrentDirectory, path))
 
 let writeException exn =
     far.UI.WriteLine (sprintf "%A" exn, ConsoleColor.Red)
@@ -162,10 +101,10 @@ let showTempText text title =
     showTempFile file title
 
 let isScriptFileName (fileName: string) =
-    fileName.EndsWith (".fsx", StringComparison.OrdinalIgnoreCase) || fileName.EndsWith (".fsscript", StringComparison.OrdinalIgnoreCase)
+    String.endsWithIgnoreCase fileName ".fsx" || String.endsWithIgnoreCase fileName ".fsscript"
 
 let isFSharpFileName (fileName: string) =
-    isScriptFileName fileName || fileName.EndsWith (".fs", StringComparison.OrdinalIgnoreCase)
+    isScriptFileName fileName || String.endsWithIgnoreCase fileName ".fs"
 
 /// Shows a message with the left aligned text.
 let showText text title =

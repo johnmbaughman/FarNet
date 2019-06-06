@@ -6,47 +6,44 @@ open Test
 
 let testDialogOverDialog = async {
     // dialog 1
-    Job.As showWideDialog
-    |> Job.Start
-    do! test isWideDialog
+    Job.StartImmediateFrom showWideDialog
+    do! job { Assert.True (isWideDialog ()) }
 
     // dialog 2 on top of 1
-    Job.As (fun () -> far.Message "testDialogOverDialog")
-    |> Job.Start
-    do! test (isDialogText 1 "testDialogOverDialog")
+    Job.StartImmediate (job { far.Message "testDialogOverDialog" })
+    do! job {
+        Assert.Dialog ()
+        Assert.Equal ("testDialogOverDialog", far.Dialog.[1].Text)
+    }
     do! Job.Keys "Esc"
 
     // dialog 1
-    do! test isWideDialog
+    do! job { Assert.True (isWideDialog ()) }
     do! Job.Keys "Esc"
 
-    // done
-    do! test isFarPanel
+    do! job { Assert.NativePanel () }
 }
 
 let testEditorOverDialog = async {
     // dialog
-    fun () -> far.Message "testEditorOverDialog"
-    |> Job.As
-    |> Job.Start
-    do! test isDialog
+    Job.StartImmediate (job { far.Message "testEditorOverDialog" })
+    do! job { Assert.Dialog () }
 
     // editor
-    fun () ->
+    job {
         let editor = far.CreateEditor (FileName = far.TempName (), Title = "testEditorOverDialog")
         editor.DisableHistory <- true
         editor.Open ()
-    |> Job.As
-    |> Job.Start
-    do! test isEditor
+    }
+    |> Job.StartImmediate
+    do! job { Assert.Editor () }
     do! Job.Keys "Esc"
 
     // dialog
-    do! test isDialog
+    do! job { Assert.Dialog () }
     do! Job.Keys "Esc"
 
-    // done
-    do! test isFarPanel
+    do! job { Assert.NativePanel () }
 }
 
 let test = async {

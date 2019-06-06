@@ -1,65 +1,68 @@
 
-module TestPanel
+module TestPanel01
+open Test
 open FarNet
 open FarNet.FSharp
-open Test
 
 /// Not a panel test but related to panels.
 let testSkipModal = async {
     async {
         // dialog
-        Job.Start <| Job.As showWideDialog
+        Job.StartImmediateFrom showWideDialog
         // wait
         do! Job.SkipModal ()
         // done
-        do! Job.As (fun () -> far.Message "done")
+        do! job { far.Message "done" }
     }
-    |> Job.Start
-    do! test isWideDialog
+    |> Job.StartImmediate
+    do! job { Assert.True (isWideDialog ()) }
 
     // exit dialog -> trigger "done" after skipModal
     do! Job.Keys "Esc"
-    do! wait (fun () -> isDialog () && dt 1 = "done")
+    do! Job.Wait (fun () -> Window.IsDialog () && far.Dialog.[1].Text = "done")
 
     // exit dialog
     do! Job.Keys "Esc"
-    do! test isFarPanel
+    do! job { Assert.NativePanel () }
 }
 
 let testCannotOpenOnModal = async {
     // dialog
-    Job.Start <| Job.As showWideDialog
-    do! test isDialog
+    Job.StartImmediateFrom showWideDialog
+    do! job { Assert.Dialog () }
 
     // try open panel from dialog -> error dialog
-    Job.Start <| Job.OpenPanel (MyPanel.panel [])
-    do! wait (fun () -> isDialog () && dt 1 = "Cannot switch to panels.")
+    Job.StartImmediate <| Job.OpenPanel (MyPanel.panel [])
+    do! Job.Wait (fun () -> Window.IsDialog () && far.Dialog.[1].Text = "Cannot switch to panels.")
 
     // exit two dialogs
     do! Job.Keys "Esc Esc"
-    do! test isFarPanel
+    do! job { Assert.NativePanel () }
 }
 
 let testCanOpenFromEditor = async {
     // editor
-    do! Job.As (fun () ->
+    do! job {
         let editor = far.CreateEditor (FileName = far.TempName ())
         editor.DisableHistory <- true
         editor.Open ()
-    )
-    do! test isEditor
+    }
+    do! job { Assert.Editor () }
 
     // panel
     do! Job.OpenPanel (MyPanel.panel [])
-    do! test isMyPanel
+    do! job { Assert.True (isMyPanel ()) }
 
     // exit panel
     do! Job.Keys "Esc"
-    do! test isFarPanel
+    do! job { Assert.NativePanel () }
 
     // exit editor
     do! Job.Keys "F12 2 Esc"
-    do! test (fun () -> isFarPanel () && far.Window.Count = 2)
+    do! job {
+        Assert.NativePanel ()
+        Assert.Equal (2, far.Window.Count)
+    }
 }
 
 let test = async {

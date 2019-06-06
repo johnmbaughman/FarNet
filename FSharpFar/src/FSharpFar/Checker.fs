@@ -1,8 +1,7 @@
-﻿module FSharpFar.Checker
-open System
+﻿[<RequireQualifiedAccess>]
+module FSharpFar.Checker
 open System.IO
-open Config
-open Microsoft.FSharp.Compiler.SourceCodeServices
+open FSharp.Compiler.SourceCodeServices
 
 [<NoComparison>]
 type CheckFileResult = {
@@ -28,7 +27,7 @@ let check file text config = async {
         let addFiles paths =
             for f in paths do
                 let f1 = Path.GetFullPath f
-                if files.FindIndex (fun x -> f1.Equals (x, StringComparison.OrdinalIgnoreCase)) < 0 then
+                if not (Seq.containsIgnoreCase f1 files) then
                     files.Add f1
         addFiles config.FscFiles
         addFiles config.EtcFiles
@@ -72,12 +71,12 @@ let check file text config = async {
     }
 }
 
-let compile (config: Config) = async {
+let compile config = async {
     // assert output is set
     let hasOutOption = config.OutArgs |> List.exists (fun x -> x.StartsWith "-o:" || x.StartsWith "--out:")
     if not hasOutOption then invalidOp "Configuration must have [out] {-o|--out}:<output exe or dll>."
 
-    // combine options    
+    // combine options
     let args = [|
         yield "fsc.exe"
         yield! defaultCompilerArgs

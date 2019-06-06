@@ -17,80 +17,82 @@ let flow = async {
         text <- r
 
         // ask how to continue
-        let! r = jobAsk text "Wizard" [|"&Yes"; "&No"; "&Cancel"; "&Error"|]
-        match r with
+        match! jobAsk text "Wizard" [|"&Yes"; "&No"; "&Cancel"; "&Error"|] with
         | 2 -> do! Job.Cancel ()
         | 3 -> failwith "Oh"
-        | _ -> answer <- r
+        | _ as r -> answer <- r
 
     // open panel and wait for closing
     let lines = text.Split [|'\n'|] |> Seq.cast
     do! Job.FlowPanel (MyPanel.panel lines)
 
     // show final message
-    do! Job.As (fun () -> far.Message (text, "Done"))
+    do! job { far.Message (text, "Done") }
 }
 
 /// The full flow with one return to the editor.
 let testNo = async {
-    Job.Start flow
-    do! test isEditor
+    Job.StartImmediate flow
+    do! job { Assert.Editor () }
 
     // exit editor
     do! Job.Keys "Esc"
-    do! test isWizard
+    do! job { Assert.True (isWizard ()) }
 
     // No -> repeat editor
     do! Job.Keys "N"
-    do! test isEditor
+    do! job { Assert.Editor () }
 
     // exit editor
     do! Job.Keys "Esc"
-    do! test isWizard
+    do! job { Assert.True (isWizard ()) }
 
     // Yes -> my panel
     do! Job.Keys "Y"
-    do! test isMyPanel
+    do! job { Assert.True (isMyPanel ()) }
 
     // exit panel -> dialog
     do! Job.Keys "Esc"
-    do! test isDone
+    do! job {
+        Assert.Dialog ()
+        Assert.Equal ("Done", far.Dialog.[0].Text)
+    }
 
     // exit dialog
     do! Job.Keys "Esc"
-    do! test isFarPanel
+    do! job { Assert.NativePanel () }
 }
 
 /// The flow is stopped by an exception.
 let testError = async {
-    Job.Start flow
-    do! test isEditor
+    Job.StartImmediate flow
+    do! job { Assert.Editor () }
 
     // exit editor
     do! Job.Keys "Esc"
-    do! test isWizard
+    do! job { Assert.True (isWizard ()) }
 
     // Error -> dialog
     do! Job.Keys "E"
-    do! test isError
+    do! job { Assert.True (isError ()) }
 
     // exit dialog
     do! Job.Keys "Esc"
-    do! test isFarPanel
+    do! job { Assert.NativePanel () }
 }
 
 /// The flow is stopped by cancelling.
 let testCancel = async {
-    Job.Start flow
-    do! test isEditor
+    Job.StartImmediate flow
+    do! job { Assert.Editor () }
 
     // exit editor
     do! Job.Keys "Esc"
-    do! test isWizard
+    do! job { Assert.True (isWizard ()) }
 
     // Cancel -> panels
     do! Job.Keys "C"
-    do! test isFarPanel
+    do! job { Assert.NativePanel () }
 }
 
 let test = async {

@@ -1,54 +1,56 @@
 ﻿namespace FSharpFar
 open FarNet
-open Session
 open System
 open System.IO
-open Command
 open FarStdWriter
 open FarInteractive
-open Config
 
-[<System.Runtime.InteropServices.Guid "2b52615b-ea79-46e4-ac9d-78f33599db62">]
 [<ModuleCommand (Name = "FSharpFar", Prefix = "fs")>]
+[<Guid "2b52615b-ea79-46e4-ac9d-78f33599db62">]
 type FarCommand () =
     inherit ModuleCommand ()
-    override x.Invoke (sender, e) =
+    override __.Invoke (_, e) =
         let echo () =
             far.UI.WriteLine ((sprintf "fs:%s" e.Command), ConsoleColor.DarkGray)
 
         let writeResult r =
             for w in r.Warnings do
-                far.UI.WriteLine (strErrorFull w, ConsoleColor.Yellow)
+                far.UI.WriteLine (FSharpErrorInfo.strErrorFull w, ConsoleColor.Yellow)
             if not (isNull r.Exception) then
                 writeException r.Exception
 
-        match parseCommand e.Command with
-        | Quit ->
-            match tryFindMainSession () with
-            | Some s -> s.Close ()
-            | _ -> far.UI.WriteLine "Not opened."
+        match Command.parse e.Command with
+        | Command.Quit ->
+            match Session.TryDefaultSession () with
+            | Some ses -> ses.Close ()
+            | None -> far.UI.WriteLine "The session is not opened."
 
-        | Open args ->
-            let ses = match args.With with | Some path -> Session.GetOrCreate path | _ -> getMainSession ()
+        | Command.Open args ->
+            let ses =
+                match args.With with
+                | Some path -> Session.GetOrCreate path
+                | _ -> Session.DefaultSession ()
             FarInteractive(ses).Open ()
 
-        | Code code ->
+        | Command.Code code ->
             echo ()
-            use std = new FarStdWriter ()
-            let ses = getMainSession ()
+            use _std = new FarStdWriter ()
+            let ses = Session.DefaultSession ()
             use writer = new StringWriter ()
             let r = ses.EvalInteraction (writer, code)
 
             far.UI.Write (writer.ToString ())
             writeResult r
 
-        | Exec args ->
+        | Command.Exec args ->
             use _std = new FarStdWriter ()
+
+            //! fs: //exec ;; TryPanelFSharp.run () // must pick up the root config
             let ses =
                 match args.With, args.File with
                 | Some configPath, _ -> configPath
-                | _, Some filePath -> getConfigPathForFile filePath
-                | _ -> farMainConfigPath
+                | _, Some filePath -> Config.defaultFileForFile filePath
+                | _ -> Config.defaultFile ()
                 |> Session.GetOrCreate
 
             let echo =
@@ -85,26 +87,26 @@ type FarCommand () =
             | _ ->
                 ()
 
-        | Compile args ->
+        | Command.Compile args ->
             use _progress = new Progress "Compiling..."
 
             let path =
                 match args.With with
                 | Some path ->
                     path
-                | None -> 
-                    match farTryPanelDirectory () |> Option.bind tryConfigPathInDirectory with
+                | None ->
+                    match Config.tryFindFileInDirectory far.CurrentDirectory with
                     | Some path ->
                         path
                     | None ->
                         invalidOp "Cannot find configuration file."
-            
-            let config = readConfigFromFile path
-            
+
+            let config = Config.readFromFile path
+
             let errors, code = Checker.compile config |> Async.RunSynchronously
             if errors.Length > 0 then
                 use writer = new StringWriter ()
                 for error in errors do
-                    writer.WriteLine (strErrorLine error)
+                    writer.WriteLine (FSharpErrorInfo.strErrorLine error)
                 showTempText (writer.ToString ()) "Errors"
             ()

@@ -1,13 +1,11 @@
 ﻿[<AutoOpen>]
-module FSharpFar.FarModule
+module FSharpFar.IEditorExt
 open FarNet
-open Config
-open Session
-open Microsoft.FSharp.Compiler.SourceCodeServices
-open System
 open System.IO
+open FSharp.Compiler.SourceCodeServices
 
 module private Key =
+    let config = "F# config"
     let session = "F# session"
     let errors = "F# errors"
     let autoTips = "F# auto tips"
@@ -48,15 +46,24 @@ type IEditor with
         and set (value: bool) = x.SetOpt (Key.checking, Some value)
 
     member x.MyConfig () =
-        match x.MySession with
-        | Some x -> x.Config
-        | _ -> getConfigForFile x.FileName
+        match x.GetOpt<Config> Key.config with
+        | Some config ->
+            config
+        | None ->
+            let config =
+                match x.MySession with
+                | Some ses ->
+                    ses.Config
+                | None ->
+                    Config.readForFile x.FileName
+            x.SetOpt (Key.config, Some config)
+            config
 
     member x.MyFileErrors () =
         match x.MyErrors with
-        | None -> None
+        | None ->
+            None
         | Some errors ->
-
-        let file = Path.GetFullPath x.FileName
-        let errors = errors |> Array.filter (fun error -> file.Equals (Path.GetFullPath error.FileName, StringComparison.OrdinalIgnoreCase))
-        if errors.Length = 0 then None else Some errors
+            let file = Path.GetFullPath x.FileName
+            let errors = errors |> Array.filter (fun error -> String.equalsIgnoreCase file (Path.GetFullPath error.FileName))
+            if errors.Length = 0 then None else Some errors

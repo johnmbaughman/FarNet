@@ -1,8 +1,6 @@
 ﻿module FSharpFar.FarInteractive
 open FarNet
 open FarNet.Tools
-open Command
-open Session
 open System
 open System.IO
 
@@ -17,14 +15,13 @@ type FarInteractive(session: Session) =
     let session = session
 
     override x.Invoke (code, area) =
-        // one line with a command; for now do #quit and ignore others
-        if area.FirstLineIndex = area.LastLineIndex && (match parseCommand code with Quit -> true | _ -> false) then
+        if area.FirstLineIndex = area.LastLineIndex && (match Command.parse code with Command.Quit -> true | _ -> false) then
+            // one line with a command, for now do #quit and ignore others
             session.Close ()
-
-        // eval code
         else
-        let writer = x.Editor.OpenWriter ()
-        doEval writer (fun _ -> session.EvalInteraction (writer, code))
+            // eval code
+            let writer = x.Editor.OpenWriter ()
+            Session.Eval (writer, fun () -> session.EvalInteraction (writer, code))
 
     override x.KeyPressed key =
         match key.VirtualKeyCode with
@@ -43,11 +40,10 @@ type FarInteractive(session: Session) =
         editor.DisableHistory <- true
         editor.Title <- sprintf "F# %s %s" (Path.GetFileName session.ConfigFile) (Path.GetFileName path)
 
-        // attach to session
+        // connect session
         editor.MySession <- Some session
-        let onSessionClose = Handler<unit> (fun _ _ -> if editor.IsOpened then editor.Close ())
-        session.OnClose.AddHandler onSessionClose
-        editor.Closed.Add (fun _ -> session.OnClose.RemoveHandler onSessionClose)
+        let onSessionClose = session.OnClose.Subscribe (fun () -> if editor.IsOpened then editor.Close ())
+        editor.Closed.Add (fun _ -> onSessionClose.Dispose ())
 
         // Open. Post, to avoid modal. Use case:
         // - open session by `fs: //open`

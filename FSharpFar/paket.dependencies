@@ -1,13 +1,7 @@
-framework: net45
+framework: net461
 copy_local: false
 references: strict
 
 source https://www.nuget.org/api/v2
 nuget FSharp.Compiler.Service
 nuget FSharp.Core
-
-# for compile, use the same as FSC
-nuget System.Reflection.Metadata = 1.4.2
-
-# just for Convert-Project.ps1
-nuget FSharp.Compiler.Service.ProjectCracker

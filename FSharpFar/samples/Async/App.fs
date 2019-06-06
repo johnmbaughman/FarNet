@@ -1,6 +1,5 @@
-
-// The sample wizard flow. Run it as:
-// fs: //exec file=App.fs ;; FarNet.FSharp.Job.Start App.flowWizard
+// The sample wizard dialog flow.
+// fs: //exec ;; FarNet.FSharp.Job.Start App.flowWizard
 
 module App
 open FarNet
@@ -9,7 +8,7 @@ open System.IO
 
 /// Shows a message with the specified buttons and gets the choice index.
 let jobAsk text title buttons =
-    Job.As (fun _ -> far.Message (text, title, MessageOptions.LeftAligned, buttons))
+    job { return far.Message (text, title, MessageOptions.LeftAligned, buttons) }
 
 /// Opens a non-modal editor and gets the result text when the editor exits.
 let jobEditText text title = async {
@@ -32,12 +31,11 @@ let jobEditText text title = async {
 let flowWizard = async {
     let text = ref "Edit this text in non-modal editor.\nThe wizard continues when you exit."
     let loop = ref true
-    while !loop do
-        let! answer = jobAsk !text "Wizard" [| "&OK"; "&Editor"; "&Panel"; "&Cancel" |]
-        match answer with
+    while loop.Value do
+        match! jobAsk !text "Wizard" [| "&OK"; "&Editor"; "&Panel"; "&Cancel" |] with
         | 0 ->
             // [OK] - close the wizard and show the final message
-            do! Job.As (fun _ -> far.Message (!text, "Done"))
+            do! job { far.Message (!text, "Done") }
             loop := false
         | 1 ->
             // [Editor] - non-modal editor to edit the text

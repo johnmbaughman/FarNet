@@ -1,7 +1,102 @@
 
 https://www.nuget.org/packages/FarNet.FSharpFar
 Far Manager 3.0.5048
-FarNet 5.2.14
+FarNet 5.2.18
+
+= 1.9.6 =
+
+FSharp.Compiler.Service (29.0) fixes some anonymous record issues.
+
+= 1.9.5 =
+
+FSharp.Compiler.Service (28.0)
+- requires .NET Framework 4.6.1
+- fixes wrong help info extracted from XML docs
+
+= 1.9.4 =
+
+Add Guid alias for System.Runtime.InteropServices.Guid (Attribute).
+
+FSharp.Compiler.Service (27.0.1)
+
+= 1.9.3 =
+
+New FarNet.FSharp.Assert methods for typical testing tasks. On failures they
+clearly show the locations in code, unlike often cryptic F# stack traces of
+usual exceptions.
+
+New FarNet.FSharp.Window methods, just helpers, no new functionality.
+
+Use new Assert and Window methods in tests in "samples".
+
+FSharp.Core (4.6.2)
+
+= 1.9.2 =
+
+The default sessions / configurations are now used instead of the main.
+The main is still default for directories with no configuration files.
+
+API
+- Add more Job helper functions for panels.
+- Add demo in samples\Async\TestPanel02.fs.
+- Job.FlowDialog - change parameters style.
+
+= 1.9.1 =
+
+FSharp.Core (4.6.1)
+
+= 1.9.0 =
+
+FSharp.Compiler.Service (26.0.1) supports all F# 4.6 features, see
+https://blogs.msdn.microsoft.com/dotnet/2019/01/24/announcing-f-4-6-preview/
+Example: "samples\PowerShellFar\PanelObjects.fsx" uses anonymous records.
+
+Tidy up commands and logic with configurations. If a config file is specified
+then it must exist. If a directory is searched for config files then the first
+in alphabetical order is used. If there is none then either the main config is
+used or an error is thrown, depending on an operation.
+
+= 1.8.2 =
+
+- Requires FarNet 5.2.18
+- FSharp.Core (4.6), FSharp.Compiler.Service (25.0.1)
+
+= 1.8.1 =
+
+- Amend temporary paths and names of generated projects.
+- Some more details in samples/fsi.
+
+= 1.8.0 =
+
+New config file section [use] allows using other config files in the current.
+You can easily compose a session with existing "projects" and new settings.
+
+"Project" opens the main session if there is no config in the current folder.
+
+Add `PowerShellFar.invokeScript`. See "samples\PowerShellFar" in the repo.
+
+Add samples\Lib\SessionVariables.fs, SessionVariablesPanel.fsx
+
+= 1.7.0 =
+
+New menu command "Project" makes a special project from your config file and
+opens it, usually in Visual Studio. You get the full power for composing your
+files. You do not have to build anything and restart Far in order to test the
+changes. Just edit, save, and run F# files in this special project.
+See README for details.
+
+Retire tools/Convert-Project.ps1, not so useful now.
+
+FSharp.Core 4.5.4.
+
+= 1.6.2 =
+
+`[F5]` in editors is shortcut for `[F11]` \ `FSharpFar` \ `Load`
+
+= 1.6.1 =
+
+Add job helper: job {...} ~ Job.From (fun () -> ...)
+Rework Job methods.
 
 = 1.6.0 =
 
