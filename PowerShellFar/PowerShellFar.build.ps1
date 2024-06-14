@@ -1,115 +1,132 @@
-
-<#
+﻿<#
 .Synopsis
-	Build script (https://github.com/nightroman/Invoke-Build)
+	Build script, https://github.com/nightroman/Invoke-Build
 #>
 
 param(
-	$Platform = (property Platform x64),
-	$Configuration = (property Configuration Release)
+	$Configuration = (property Configuration Release),
+	$FarHome = (property FarHome C:\Bin\Far\x64)
 )
-$FarHome = "C:\Bin\Far\$Platform"
-$PsfHome = "$FarHome\FarNet\Modules\PowerShellFar"
 
-task Clean {
-	remove z, bin, obj, Modules\FarDescription\bin, Modules\FarDescription\obj, About-PowerShellFar.htm
+Set-StrictMode -Version 3
+$ModuleName = "PowerShellFar"
+$ModuleHome = "$FarHome\FarNet\Modules\$ModuleName"
+
+task clean {
+	remove z, bin, obj, About-PowerShellFar.htm
 }
 
 # Install all. Run after Build.
-task Install InstallBin, InstallRes, BuildPowerShellFarHelp
+task publish installBin, installRes
 
-task Uninstall {
-	if (Test-Path $PsfHome) { Remove-Item $PsfHome -Recurse -Force }
+task uninstall {
+	if (Test-Path $ModuleHome) { Remove-Item $ModuleHome -Recurse -Force }
 }
 
-task Help {
-	exec { MarkdownToHtml "From=About-PowerShellFar.text" "To=About-PowerShellFar.htm" }
-	exec { HtmlToFarHelp "From=About-PowerShellFar.htm" "To=$PsfHome\PowerShellFar.hlf" }
+task markdown {
+	# HLF
+	exec { pandoc.exe README.md --output=About-PowerShellFar.htm --from=gfm --no-highlight }
+	exec { HtmlToFarHelp from=About-PowerShellFar.htm to=$ModuleHome\PowerShellFar.hlf }
+
+	# HTM
+	assert (Test-Path $env:MarkdownCss)
+	exec {
+		pandoc.exe @(
+			'README.md'
+			'--output=About-PowerShellFar.htm'
+			'--from=gfm'
+			'--embed-resources'
+			'--standalone'
+			"--css=$env:MarkdownCss"
+			'--metadata=pagetitle:PowerShellFar'
+		)
+	}
 }
 
-task InstallBin {
-	exec { robocopy Bin\$Configuration $PsfHome PowerShellFar.dll PowerShellFar.xml /np } (0..2)
-	exec { robocopy Modules\FarDescription\Bin\$Configuration $PsfHome\Modules\FarDescription FarDescription.dll /np } (0..2)
+task installBin {
+	exec { dotnet publish "$ModuleName.csproj" -c $Configuration -o $ModuleHome --no-build }
+	Remove-Item "$ModuleHome\PowerShellFar.deps.json"
+
+	# move `ref` folder to "expected" location or cannot compile C# in PS
+	# ~ cannot find '...\PowerShellFar\runtimes\win\lib\net7.0\ref'.
+	exec { robocopy "$ModuleHome\ref" "$ModuleHome\runtimes\win\lib\net8.0\ref" /s } (0..2)
+	Remove-Item -LiteralPath "$ModuleHome\ref" -Force -Recurse
+
+	# prune resources, to keep our dll cache cleaner
+	Set-Location $ModuleHome
+	remove cs, de, es, fr, it, ja, ko, pl, pt-BR, ru, tr, zh-Hans, zh-Hant
+
+	# unused
+	Set-Location runtimes
+	remove freebsd, illumos, ios, linux*, osx*, solaris, tvos, unix, win-arm*
 }
 
-task InstallRes {
-	exec { robocopy . $PsfHome PowerShellFar.ps1 TabExpansion.ps1 TabExpansion2.ps1 TabExpansion.txt /np } (0..2)
-	exec { robocopy Modules\FarDescription $PsfHome\Modules\FarDescription about_FarDescription.help.txt FarDescription.psd1 FarDescription.psm1 FarDescription.Types.ps1xml /np } (0..2)
-	exec { robocopy Modules\FarInventory $PsfHome\Modules\FarInventory about_FarInventory.help.txt FarInventory.psm1 /np } (0..2)
-	exec { robocopy Modules\FarPackage $PsfHome\Modules\FarPackage /np } (0..2)
+task installRes {
+	exec { robocopy . $ModuleHome PowerShellFar.ps1 TabExpansion2.ps1 } (0..2)
 }
 
-task BuildPowerShellFarHelp -Inputs {Get-Item Commands\*} -Outputs "$PsfHome\PowerShellFar.dll-Help.xml" {
-	Add-Type -Path $FarHome\FarNet\FarNet.dll
-	Add-Type -Path $FarHome\FarNet\FarNet.Settings.dll
-	Add-Type -Path $FarHome\FarNet\FarNet.Tools.dll
-	Add-Type -Path $FarHome\FarNet\Modules\PowerShellFar\PowerShellFar.dll
-	$ps = [Management.Automation.PowerShell]::Create()
-	$state = [Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
-	[PowerShellFar.Zoo]::Initialize($state)
-	$ps.Runspace = [Management.Automation.Runspaces.RunspaceFactory]::CreateRunspace($state)
-	$ps.Runspace.Open()
-	#! $ErrorActionPreference = 1 in Convert-Helps does not help to catch errors
-	$null = $ps.AddScript(@"
-`$ErrorActionPreference = 1
-. Helps.ps1
-Convert-Helps "$BuildRoot\Commands\PowerShellFar.dll-Help.ps1" "$Outputs"
-"@)
-	$ps.Invoke()
+# Build PowerShell help if FarHost else Write-Warning.
+task help -Inputs {Get-Item Commands\*} -Outputs "$ModuleHome\PowerShellFar.dll-Help.xml" {
+	if ($Host.Name -eq 'FarHost') {
+		. Helps.ps1
+		Convert-Helps "$BuildRoot\Commands\PowerShellFar.dll-Help.ps1" "$Outputs"
+	}
+	else {
+		# let the caller know
+		$env:FarNetToBuildPowerShellFarHelp = 1
+		Write-Warning "Run task 'help' with PowerShellFar."
+	}
 }
 
 # Make package files
-task Package Help, {
-	$dirMain = 'z\tools\FarHome\FarNet\Modules\PowerShellFar'
-
+task package markdown, {
 	remove z
-	$null = mkdir $dirMain
+	$toModule = mkdir 'z\tools\FarHome\FarNet\Modules\PowerShellFar'
 
-	Copy-Item -Destination $dirMain About-PowerShellFar.htm, History.txt, LICENSE.txt, PowerShellFar.macro.lua
-	Copy-Item -Destination $dirMain $FarHome\FarNet\Modules\PowerShellFar\* -Recurse
-	Copy-Item -Destination $dirMain Bench -Recurse -Force
+	# module
+	exec { robocopy $ModuleHome $toModule /s /xf *.pdb } (0..2)
+
+	# logo
+	Copy-Item -Destination z ..\Zoo\FarNetLogo.png
+
+	Copy-Item -Destination $toModule -Recurse -Force @(
+		"Bench"
+		"About-PowerShellFar.htm"
+		"History.txt"
+		"..\LICENSE"
+		"PowerShellFar.macro.lua"
+	)
 }
 
 # Set version
-task Version {
+task version {
 	. ..\Get-Version.ps1
 	($script:Version = $PowerShellFarVersion)
 }
 
 # Make NuGet package
-task NuGet Package, Version, {
-	$text = @'
-PowerShellFar is the FarNet module for Far Manager, the file manager.
-It is the Windows PowerShell host in the genuine console environment.
+task nuget package, version, {
+	Copy-Item About.md z\README.md
 
----
-
-To install FarNet packages, follow these steps:
-
-https://raw.githubusercontent.com/nightroman/FarNet/master/Install-FarNet.en.txt
-
----
-'@
-	# nuspec
 	Set-Content z\Package.nuspec @"
 <?xml version="1.0"?>
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
 	<metadata>
+		<description>PowerShell Core host and scripting environment for Far Manager</description>
 		<id>FarNet.PowerShellFar</id>
 		<version>$Version</version>
 		<authors>Roman Kuzmin</authors>
 		<owners>Roman Kuzmin</owners>
 		<projectUrl>https://github.com/nightroman/FarNet</projectUrl>
-		<iconUrl>https://raw.githubusercontent.com/wiki/nightroman/FarNet/images/FarNetLogo.png</iconUrl>
+		<icon>FarNetLogo.png</icon>
 		<license type="expression">BSD-3-Clause</license>
-		<requireLicenseAcceptance>false</requireLicenseAcceptance>
-		<summary>$text</summary>
-		<description>$text</description>
-		<releaseNotes>https://raw.githubusercontent.com/nightroman/FarNet/master/PowerShellFar/History.txt</releaseNotes>
+		<releaseNotes>https://github.com/nightroman/FarNet/blob/main/PowerShellFar/History.txt</releaseNotes>
 		<tags>FarManager FarNet PowerShell Module Plugin</tags>
+		<readme>README.md</readme>
 	</metadata>
 </package>
 "@
-	# pack
-	exec { NuGet pack z\Package.nuspec -NoPackageAnalysis }
+
+	#! -NoPackageAnalysis ~ "scripts will not be executed"
+	exec { nuget pack z\Package.nuspec -NoPackageAnalysis }
 }

@@ -1,13 +1,11 @@
 ﻿
-// Copyright 2012-2016 Roman Kuzmin
+// Copyright (c) Roman Kuzmin
 // http://www.apache.org/licenses/LICENSE-2.0
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Data.Common;
 using System.IO;
-using System.Text.RegularExpressions;
+using System.Text;
 using System.Xml;
 
 namespace HtmlToFarHelp
@@ -16,35 +14,25 @@ namespace HtmlToFarHelp
 	{
 		const string ArgWrap = "§¦";
 		const string ErrExpectedA = "Expected <a href=...>...</a>.";
-		const string ErrInvalidHtml1 = "Invalid or not supported HTML: '{0}'.";
-		const string ErrInvalidHtml2 = "Invalid or not supported HTML: '{0}'. At line {1} char {2}.";
+		const string ErrExpectedList = "Expected list.";
+		const string ErrInvalidHtml1 = "Invalid or not supported HTML: {0} At {1}";
+		const string ErrInvalidHtml2 = "Invalid or not supported HTML: {0} At {1}:{2}:{3}";
 		const string ErrMissingTarget = "Missing href target: {0}.";
-		const string ErrNestedList = "Nested list is not supported.";
 		const string ErrPreCode = "Expected <pre><code>...</code></pre>.";
 		const string ErrTwoTopics = "The topic id '{0}' is used twice.";
 		const string ErrUnexpectedElement = "Unexpected element '{0}'.";
 		const string ErrUnexpectedNode = "Unexpected node {0} {1}.";
-		readonly Regex _reNewLine = new Regex(@"\r?\n");
-		readonly Regex _reSpaces = new Regex(" +");
-		readonly Regex _reUnindent = new Regex(@"\r?\n[\ \t]+");
-		readonly Regex _reOptions = new Regex(@"^\s*HLF:\s*(.*)", RegexOptions.IgnoreCase | RegexOptions.Singleline);
-		readonly Regex _reWinNewLine = new Regex(@"(?<!\r)\n"); //|\r(?!\n)
-		readonly char[] TrimNewLine = new char[] { '\r', '\n' };
 		readonly HashSet<string> _topics = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		readonly HashSet<string> _links = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		bool _br;
 		bool _started;
 		bool _needNewLine;
 		int _emphasis;
-		int _countParaInItem;
 		int _countTextInPara;
-		int _heading;
-		int _item;
-		int _itemCount;
-		int _list;
 		int _para;
 		int _quote;
-		int _termCount;
-		ListKind _listKind;
+		int _internalHeadings;
+		readonly Stack<ListInfo> _list = new Stack<ListInfo>();
 		string _IndentCode_;
 		string IndentCode { get { return _quote == 0 ? _IndentCode_ : _IndentCode_ + "".PadRight(_quote * _options.IndentQuote, ' '); } }
 		string _IndentCode2_;
@@ -52,46 +40,35 @@ namespace HtmlToFarHelp
 		string _IndentCode3_;
 		string IndentCode3 { get { return _quote == 0 ? _IndentCode3_ : _IndentCode3_ + "".PadRight(_quote * _options.IndentQuote, ' '); } }
 		string _IndentList_;
-		string IndentList { get { return _quote == 0 ? _IndentList_ : _IndentList_ + "".PadRight(_quote * _options.IndentQuote, ' '); } }
+		string IndentList
+		{
+			get
+			{
+				var r = _quote == 0 ? _IndentList_ : _IndentList_ + "".PadRight(_quote * _options.IndentQuote, ' ');
+				if (_list.Count > 1)
+					return "".PadRight(4 * (_list.Count - 1), ' ') + r;
+				else
+					return r;
+			}
+		}
 		string _IndentPara_;
 		string IndentPara { get { return _quote == 0 ? _IndentPara_ : _IndentPara_ + "".PadRight(_quote * _options.IndentQuote, ' '); } }
 		Options _globalOptions;
 		Options _options;
-		public XmlReader Reader { get; set; }
-		public StreamWriter Writer { get; set; }
-		static Options ParseOptions(Options options, string optionString)
+		readonly string _fileName;
+		readonly XmlReader _reader;
+		readonly StreamWriter _writer;
+		readonly bool _verbose;
+		readonly StringBuilder _sbA = new StringBuilder();
+
+		public Converter(string inputFileName, XmlReader reader, StreamWriter writer, bool verbose)
 		{
-			try
-			{
-				var builder = new DbConnectionStringBuilder();
-				builder.ConnectionString = optionString;
-
-				foreach (DictionaryEntry it in (IDictionary)builder)
-				{
-					var value = it.Value.ToString();
-					switch (it.Key.ToString())
-					{
-						case "centerheading": options.CenterHeading = bool.Parse(value); break;
-						case "indentcode": options.IndentCode = int.Parse(value); break;
-						case "indentlist": options.IndentList = int.Parse(value); break;
-						case "indentpara": options.IndentPara = int.Parse(value); break;
-						case "indentquote": options.IndentQuote = int.Parse(value); break;
-						case "language": options.Language = value; break;
-						case "margin": options.Margin = int.Parse(value); break;
-						case "plaincode": options.PlainCode = bool.Parse(value); break;
-						case "plainheading": options.PlainHeading = bool.Parse(value); break;
-						case "plugincontents": options.PluginContents = value; break;
-						default: throw new ArgumentException("Unknown option: " + it.Key);
-					}
-				}
-			}
-			catch (Exception e)
-			{
-				throw new FormatException("Error on parsing HLF options: " + e.Message, e);
-			}
-
-			return options;
+			_fileName = inputFileName;
+			_reader = reader;
+			_writer = writer;
+			_verbose = verbose;
 		}
+
 		void ProcessOptions()
 		{
 			_IndentList_ = "".PadRight(_options.Margin + _options.IndentList, ' ');
@@ -105,17 +82,18 @@ namespace HtmlToFarHelp
 			_IndentCode2_ = _IndentList_ + "  " + "".PadRight(indentCode, ' ');
 			_IndentCode3_ = _IndentList_ + "   " + "".PadRight(indentCode, ' ');
 		}
+
 		public void Run()
 		{
-			if (Reader == null || Writer == null) throw new InvalidOperationException();
+			if (_reader == null || _writer == null) throw new InvalidOperationException();
 
 			// options
-			_globalOptions = Options.New();
+			_globalOptions = Options.CreateDefault();
 			_options = _globalOptions;
 			ProcessOptions();
 
 			// parse
-			while (Reader.Read())
+			while (_reader.Read())
 				Node();
 
 			// validate links
@@ -125,9 +103,10 @@ namespace HtmlToFarHelp
 					throw new InvalidDataException(string.Format(ErrMissingTarget, link));
 			}
 		}
+
 		void Node()
 		{
-			switch (Reader.NodeType)
+			switch (_reader.NodeType)
 			{
 				case XmlNodeType.Comment: Comment(); break;
 				case XmlNodeType.Element: Element(); break;
@@ -136,10 +115,11 @@ namespace HtmlToFarHelp
 				case XmlNodeType.Whitespace: Whitespace(); break;
 				case XmlNodeType.DocumentType: break;
 				default:
-					Throw(string.Format(ErrUnexpectedNode, Reader.NodeType, Reader.Name));
+					Throw(string.Format(ErrUnexpectedNode, _reader.NodeType, _reader.Name));
 					break;
 			}
 		}
+
 		void Start()
 		{
 			if (_started)
@@ -147,16 +127,17 @@ namespace HtmlToFarHelp
 
 			_started = true;
 
-			Writer.WriteLine(".Language=" + _options.Language);
+			_writer.WriteLine(".Language=" + _options.Language);
 
 			if (_options.PluginContents != null)
-				Writer.WriteLine(".PluginContents=" + _options.PluginContents);
+				_writer.WriteLine(".PluginContents=" + _options.PluginContents);
 
-			Writer.WriteLine(".Options CtrlStartPosChar=" + ArgWrap);
+			_writer.WriteLine(".Options CtrlStartPosChar=" + ArgWrap);
 		}
+
 		void Comment()
 		{
-			var match = _reOptions.Match(Reader.Value);
+			var match = Kit.MatchOptions(_reader.Value);
 			if (!match.Success)
 				return;
 
@@ -169,53 +150,57 @@ namespace HtmlToFarHelp
 			else if (_topics.Count > 0)
 			{
 				// update the current
-				_options = ParseOptions(_options, text);
+				_options = Options.Parse(_options, text);
 			}
 			else
 			{
 				// make the global and current the same
-				_globalOptions = ParseOptions(_globalOptions, text);
+				_globalOptions = Options.Parse(_globalOptions, text);
 				_options = _globalOptions;
 			}
 
 			// apply
 			ProcessOptions();
 		}
+
 		void NewLine()
 		{
 			if (_needNewLine)
 			{
-				Writer.WriteLine();
+				_writer.WriteLine();
 				_needNewLine = false;
 			}
 		}
+
 		static string Escape(string text)
 		{
 			return text.Replace("#", "##").Replace("@", "@@").Replace("~", "~~");
 		}
+
 		void Whitespace()
 		{
-			if (_reSpaces.IsMatch(Reader.Value) || _para > 0)
-				Writer.Write(Reader.Value);
+			if ((_para > 0 || Kit.HasSpaces(_reader.Value)) && !_br)
+				_writer.Write(Kit.FixNewLine(_reader.Value));
 		}
+
 		void Throw(string text)
 		{
-			var textReader = Reader as XmlTextReader;
-
 			string message;
-			if (textReader == null || !textReader.HasLineInfo())
-				message = string.Format(ErrInvalidHtml1, text);
+			if (_reader is IXmlLineInfo lineInfo && lineInfo.HasLineInfo())
+				message = string.Format(ErrInvalidHtml2, text, _fileName, lineInfo.LineNumber, lineInfo.LinePosition);
 			else
-				message = string.Format(ErrInvalidHtml2, text, textReader.LineNumber, textReader.LinePosition);
+				message = string.Format(ErrInvalidHtml1, text, _fileName);
 
 			throw new InvalidDataException(message);
 		}
+
 		void Element()
 		{
-			switch (Reader.Name)
+			switch (_reader.Name)
 			{
 				case "a": A1(); break;
 				case "blockquote": Quote1(); break;
+				case "br": BR(); break;
 				case "code": Emphasis1(); break;
 				case "dd": Item1(); break;
 				case "dl": List1(ListKind.Definition); break;
@@ -226,8 +211,9 @@ namespace HtmlToFarHelp
 				case "h3":
 				case "h4":
 				case "h5":
-				case "h6": Heading1(); break;
+				case "h6": Heading1(_reader.Name); break;
 				case "hr": Rule(); break;
+				case "kbd": Emphasis1(); break;
 				case "li": Item1(); break;
 				case "ol": List1(ListKind.Ordered); break;
 				case "p": P1(); break;
@@ -236,23 +222,25 @@ namespace HtmlToFarHelp
 				case "ul": List1(ListKind.Unordered); break;
 				// break
 				case "body":
-				case "br":
 				case "html":
 					break;
 				// skip
 				case "head":
 				case "script": // pandoc email
 				case "title":
-					Reader.Skip();
+					_reader.Skip();
 					break;
 				default:
-					Throw(string.Format(ErrUnexpectedElement, Reader.Name));
+					Throw(string.Format(ErrUnexpectedElement, _reader.Name));
 					break;
 			}
 		}
+
+		bool _isLastElementHeading;
 		void EndElement()
 		{
-			switch (Reader.Name)
+			_isLastElementHeading = false;
+			switch (_reader.Name)
 			{
 				case "blockquote": Quote2(); break;
 				case "code": Emphasis2(); break;
@@ -265,75 +253,188 @@ namespace HtmlToFarHelp
 				case "h3":
 				case "h4":
 				case "h5":
-				case "h6": Heading2(); break;
+				case "h6": Heading2(); _isLastElementHeading = true; break;
+				case "kbd": Emphasis2(); break;
 				case "li": Item2(); break;
 				case "ol": List2(); break;
 				case "p": P2(); break;
 				case "strong": Emphasis2(); break;
 				case "ul": List2(); break;
 			}
+
+			EndElement2();
 		}
+
+		// Some resets after processing end elements.
+		void EndElement2()
+		{
+			//! Pandoc produces `<dd>XYZ\r\n</dd>` with unwanted `\r\n` which leaves _needNewLine=true.
+			//! This affects the next item and gives `\r\n \r\nXYZ` instead of `\r\n XYZ`.
+			//! Ultimate solution: reset _needNewLine on each EndElement.
+			_needNewLine = false;
+
+			// just convenient to reset here
+			_br = false;
+		}
+
+		// Reads just text, https://github.com/nightroman/FarNet/issues/45
+		void ReadA(StringBuilder sb)
+		{
+			if (_reader.NodeType == XmlNodeType.Element)
+			{
+				_reader.MoveToContent();
+				_reader.Read();
+				ReadA(sb);
+				return;
+			}
+
+			if (_reader.NodeType == XmlNodeType.Text)
+			{
+				sb.Append(_reader.Value);
+				_reader.Read();
+				ReadA(sb);
+				return;
+			}
+
+			if (_reader.NodeType == XmlNodeType.EndElement)
+			{
+				if (_reader.Name == "a")
+					return;
+
+				_reader.Read();
+				ReadA(sb);
+				return;
+			}
+		}
+
 		void A1()
 		{
-			string href = Reader.GetAttribute("href");
-			if (href == null) Throw(ErrExpectedA);
+			string href = _reader.GetAttribute("href");
+			if (href == null)
+				Throw(ErrExpectedA);
 
 			if (href.StartsWith("#"))
 			{
 				href = href.Substring(1);
+				if (href == _topicContentsId)
+					href = "Contents";
 				_links.Add(href);
 			}
 
-			Reader.MoveToContent();
-			Reader.Read();
-			if (Reader.NodeType != XmlNodeType.Text)
-				Throw(ErrExpectedA);
+			_sbA.Length = 0;
+			ReadA(_sbA);
+			var text = Kit.FixNewLine(_sbA.ToString());
+			_writer.Write("~{0}~@{1}@", Escape(text), href.Replace("@", "@@").Replace("#", "##"));
 
-			var text = _reWinNewLine.Replace(Reader.Value, "\r\n");
-			Writer.Write("~{0}~@{1}@", Escape(text), href.Replace("@", "@@"));
+			//! because normal EndElement is not called, we have read it
+			EndElement2();
 		}
-		void Heading1()
+
+		// https://github.com/nightroman/FarNet/issues/44
+		void BR()
 		{
-			Start();
+			_br = true;
+			_writer.WriteLine();
 
-			++_heading;
-			Writer.WriteLine();
-			Writer.WriteLine();
-
-			string id = Reader.GetAttribute("id");
-			if (id == null)
+			var tryList = _list.Count == 0 ? null : _list.Peek();
+			if (tryList == null || tryList.Item == 0)
 			{
-				if (_options.CenterHeading)
-					Writer.Write("^");
-				else
-					Writer.Write(IndentPara);
+				_writer.Write(IndentPara);
 			}
 			else
 			{
-				if (!_topics.Add(id))
-					Throw(string.Format(ErrTwoTopics, id));
-
-				Writer.WriteLine("@{0}", id);
-				if (_options.CenterHeading)
-					Writer.Write("$^");
+				if (tryList.Kind == ListKind.Ordered)
+					_writer.Write(IndentList + "   " + ArgWrap);
 				else
-					Writer.Write("${0}", IndentPara);
+					_writer.Write(IndentList + "  " + ArgWrap);
+			}
+		}
+
+		string _topicContentsId;
+
+		void Heading1(string tag)
+		{
+			Start();
+
+			var id = _reader.GetAttribute("id");
+			if (_topicContentsId != null && (id == null || string.CompareOrdinal(tag, _options.TopicHeading) > 0))
+			{
+				// internal heading
+				++_internalHeadings;
+
+				// empty lines
+				_writer.WriteLine();
+				_writer.WriteLine();
+				if (!_isLastElementHeading)
+				{
+					for (int n = _options.EmptyLinesBeforeHeading; n > 1; --n)
+						_writer.WriteLine();
+				}
+
+				if (_options.CenterHeading)
+					_writer.Write("^");
+				else
+					_writer.Write(IndentPara);
+			}
+			else
+			{
+				// new topic heading
+				_internalHeadings = 0;
+
+				if (_verbose)
+					Console.Out.WriteLine($"HeadingId={id}");
+
+				_writer.WriteLine();
+				_writer.WriteLine();
+
+				if (_topicContentsId == null)
+				{
+					// first topic becomes "Contents"
+					_topicContentsId = id ?? "Contents";
+					_topics.Add("Contents");
+					_writer.WriteLine("@Contents");
+				}
+				else
+				{
+					// other topics
+					if (!_topics.Add(id))
+						Throw(string.Format(ErrTwoTopics, id));
+
+					// empty lines
+					for (int n = _options.EmptyLinesBeforeTopic; n > 1; --n)
+						_writer.WriteLine();
+
+					_writer.WriteLine("@{0}", id);
+				}
+
+				if (_options.CenterHeading)
+					_writer.Write("$^");
+				else
+					_writer.Write("${0}", IndentPara);
 			}
 
 			if (!_options.PlainHeading)
 			{
-				Writer.Write("#");
+				_writer.Write("#");
 				++_emphasis;
 			}
 		}
+
 		void Heading2()
 		{
-			_heading = 0;
-			_emphasis = 0;
-
 			if (!_options.PlainHeading)
-				Writer.Write("#");
+				_writer.Write("#");
+
+			// empty lines
+			if (_internalHeadings > 0)
+			{
+				for (int n = _options.EmptyLinesAfterHeading; n > 1; --n)
+					_writer.WriteLine();
+			}
+
+			_emphasis = 0;
 		}
+
 		void Emphasis1()
 		{
 			++_emphasis;
@@ -341,134 +442,170 @@ namespace HtmlToFarHelp
 			NewLine();
 
 			if (_emphasis == 1)
-				Writer.Write("#");
+				_writer.Write("#");
 		}
+
 		void Emphasis2()
 		{
 			--_emphasis;
 
 			if (_emphasis == 0)
-				Writer.Write("#");
+				_writer.Write("#");
 		}
+
 		void Term1()
 		{
-			++_termCount;
+			if (_list.Count == 0)
+				Throw(ErrExpectedList);
 
-			Writer.WriteLine();
-			if (_termCount > 1)
-				Writer.WriteLine();
+			var list = _list.Peek();
+			++list.TermCount;
 
-			_countParaInItem = 0;
-			Writer.Write(IndentPara);
+			_writer.WriteLine();
+			if (list.TermCount > 1)
+				_writer.WriteLine();
+
+			list.CountParaInItem = 0;
+			_writer.Write(IndentPara);
 		}
+
+		string GetListPrefixOrdered()
+		{
+			return _options.HighlightListNumber ? "#{0}.# " : "{0}. ";
+		}
+
+		string GetListPrefixUnordered()
+		{
+			string bullet;
+			if (_options.ListBullet is null)
+			{
+				bullet = Options.DefaultBullet;
+			}
+			else
+			{
+				var index = _list.Count <= _options.ListBullet.Length ? _list.Count - 1 : _options.ListBullet.Length - 1;
+				bullet = _options.ListBullet[index];
+			}
+
+			return _options.HighlightListBullet ? $"#{bullet}# " : $"{bullet} ";
+		}
+
 		void Item1()
 		{
-			++_item;
-			++_itemCount;
+			if (_list.Count == 0)
+				Throw(ErrExpectedList);
+
+			var list = _list.Peek();
+			++list.Item;
+			++list.ItemCount;
 			_needNewLine = false;
 			_countTextInPara = 0;
 
-			Writer.WriteLine();
-			if (_countParaInItem > 0 && _listKind != ListKind.Definition)
-				Writer.WriteLine();
+			_writer.WriteLine();
 
-			_countParaInItem = 0;
+			if ((list.CountParaInItem > 0 || _options.ListItemEmptyLine) && list.Kind != ListKind.Definition)
+				_writer.WriteLine();
 
-			Writer.Write(IndentList);
-			switch (_listKind)
+			list.CountParaInItem = 0;
+
+			_writer.Write(IndentList);
+			switch (list.Kind)
 			{
 				case ListKind.Ordered:
-					Writer.Write("{0}. " + ArgWrap, _itemCount);
+					_writer.Write(GetListPrefixOrdered() + ArgWrap, list.ItemCount);
 					break;
 				case ListKind.Unordered:
-					Writer.Write("• " + ArgWrap);
+					_writer.Write(GetListPrefixUnordered() + ArgWrap);
 					break;
 				case ListKind.Definition:
-					Writer.Write("  " + ArgWrap);
+					_writer.Write("  " + ArgWrap);
 					break;
 			}
 		}
+
 		void Item2()
 		{
-			--_item;
+			var list = _list.Peek();
+			--list.Item;
 		}
+
 		void List1(ListKind kind)
 		{
-			++_list;
-			if (_list > 1)
-				Throw(ErrNestedList);
+			if (_list.Count == 0 || _list.Peek().CountParaInItem > 0)
+				_writer.WriteLine();
 
-			_listKind = kind;
-			_itemCount = 0;
-			_termCount = 0;
-
-			Writer.WriteLine();
+			_list.Push(new ListInfo(kind));
 		}
+
 		void List2()
 		{
-			--_list;
+			_list.Pop();
 			_needNewLine = false;
-			_countParaInItem = 0;
-			_listKind = ListKind.None;
 		}
+
 		void Rule()
 		{
-			Writer.WriteLine();
-			Writer.WriteLine();
-			Writer.Write("@=");
+			_writer.WriteLine();
+			_writer.WriteLine();
+			_writer.Write("@=");
 		}
+
 		void P1()
 		{
 			++_para;
 			_needNewLine = false;
 			_countTextInPara = 0;
 
-			if (_item > 0)
-				++_countParaInItem;
+			var tryList = _list.Count == 0 ? null : _list.Peek();
+			if (tryList != null && tryList.Item > 0)
+				++tryList.CountParaInItem;
 
-			if (_item == 0)
+			if (tryList == null || tryList.Item == 0)
 			{
-				Writer.WriteLine();
-				Writer.WriteLine();
+				_writer.WriteLine();
+				_writer.WriteLine();
 
-				Writer.Write(IndentPara);
+				_writer.Write(IndentPara);
 			}
-			else if (_countParaInItem > 1)
+			else if (tryList.CountParaInItem > 1)
 			{
-				Writer.WriteLine();
-				Writer.WriteLine();
+				_writer.WriteLine();
+				_writer.WriteLine();
 
-				if (_listKind == ListKind.Ordered)
-					Writer.Write(IndentList + "   " + ArgWrap);
+				if (tryList.Kind == ListKind.Ordered)
+					_writer.Write(IndentList + "   " + ArgWrap);
 				else
-					Writer.Write(IndentList + "  " + ArgWrap);
+					_writer.Write(IndentList + "  " + ArgWrap);
 			}
 		}
+
 		void P2()
 		{
 			--_para;
 			_needNewLine = false;
 			_countTextInPara = 0;
 		}
+
 		void Pre()
 		{
-			Reader.Read();
-			if (Reader.NodeType == XmlNodeType.Whitespace)
-				Reader.Read();
-			if (Reader.NodeType != XmlNodeType.Element || Reader.Name != "code")
+			_reader.Read();
+			if (_reader.NodeType == XmlNodeType.Whitespace)
+				_reader.Read();
+			if (_reader.NodeType != XmlNodeType.Element || _reader.Name != "code")
 				Throw(ErrPreCode);
 
-			var code = Reader.ReadElementContentAsString().Trim();
-			var lines = code.Split(new string[] { "\r\n", "\n" }, StringSplitOptions.None); //TODO make a static array
+			var code = _reader.ReadElementContentAsString().TrimEnd();
+			var lines = Kit.TextToLines(code);
 
-			Writer.WriteLine();
-			Writer.WriteLine();
+			_writer.WriteLine();
+			_writer.WriteLine();
 			bool newLine = false;
-			string indent = _list == 0 ? IndentCode : _listKind == ListKind.Ordered ? IndentCode3 : IndentCode2;
+			var tryList = _list.Count == 0 ? null : _list.Peek();
+			var indent = tryList == null ? IndentCode : tryList.Kind == ListKind.Ordered ? IndentCode3 : IndentCode2;
 			foreach (var line in lines)
 			{
 				if (newLine)
-					Writer.WriteLine();
+					_writer.WriteLine();
 				else
 					newLine = true;
 
@@ -476,49 +613,55 @@ namespace HtmlToFarHelp
 				{
 					var text = indent + Escape(line.TrimEnd());
 					if (_options.PlainCode)
-						Writer.Write(text);
+						_writer.Write(text);
 					else
-						Writer.Write(" #" + text + "#");
+						_writer.Write(" #" + text + "#");
 				}
 			}
 		}
+
 		void Text()
 		{
 			++_countTextInPara;
-			var text = _reWinNewLine.Replace(Reader.Value, "\r\n");
+			var text = Kit.FixNewLine(_reader.Value);
 
 			NewLine();
 
 			// trim new lines
-			if (_list > 0)
+			if (_list.Count > 0)
 			{
 				var len1 = text.Length;
-				text = text.TrimStart(TrimNewLine);
-				if (len1 != text.Length && _countTextInPara > 1)
-					Writer.WriteLine();
+				text = Kit.TrimStartNewLine(text);
+				if (len1 != text.Length && _countTextInPara > 1 && !_br)
+					_writer.WriteLine();
 
 				var len2 = text.Length;
-				text = text.TrimEnd(TrimNewLine);
+				text = Kit.TrimEndNewLine(text);
 				_needNewLine = len2 != text.Length;
 			}
 
 			// unindent second+ lines, otherwise HLF treats them as new para
-			if (_para > 0 || _list > 0)
-				text = _reUnindent.Replace(text, "\r\n");
+			if (_para > 0 || _list.Count > 0)
+				text = Kit.UnindentText(text);
 
 			// escape
 			text = Escape(text);
 
 			// add extra # to the line end and to the next line start
 			if (_emphasis > 0)
-				text = _reNewLine.Replace(text, "#\r\n#");
+				text = Kit.EmphasisText(text);
 
-			Writer.Write(text);
+			if (_br)
+				text = Kit.TrimStartNewLine(text);
+
+			_writer.Write(text);
 		}
+
 		void Quote1()
 		{
 			++_quote;
 		}
+
 		void Quote2()
 		{
 			--_quote;

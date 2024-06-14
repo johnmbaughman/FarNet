@@ -1,10 +1,8 @@
 
-/*
-FarNet plugin for Far Manager
-Copyright (c) 2006-2016 Roman Kuzmin
-*/
+// FarNet plugin for Far Manager
+// Copyright (c) Roman Kuzmin
 
-#include "StdAfx.h"
+#include "stdafx.h"
 #include "Message.h"
 
 namespace FarNet
@@ -22,39 +20,38 @@ bool Message::Show()
 			flags |= FMSG_MB_OK;
 	}
 
-	int nbItems;
-	CStr* items = CreateBlock(nbItems);
-	PIN_NS(pinHelpTopic, _helpTopic);
+	auto items = CreateBlock();
+	GUID typeId = ToGUID(_args->TypeId);
+
+	PIN_NS(pinHelpTopic, _args->HelpTopic);
 	_selected = (int)Info.Message(
 		&MainGuid,
-		nullptr,
+		&typeId,
 		flags,
 		pinHelpTopic,
-		(wchar_t**)items,
-		nbItems,
+		(wchar_t**)items.data(),
+		items.size(),
 		_buttons ? _buttons->Length : 0);
-	delete[] items;
 
 	return _selected != -1;
 }
 
-CStr* Message::CreateBlock(int& outNbItems)
+std::vector<CStr> Message::CreateBlock()
 {
-	outNbItems = (_buttons ? _buttons->Length : 0) + (_body.Count == 0 ? 2 : 1 + _body.Count);
-	CStr* r = new CStr[outNbItems];
+	std::vector<CStr> items((_buttons ? _buttons->Length : 0) + (_body.Count == 0 ? 2 : 1 + _body.Count));
 
-	r[0].Set(_header);
+	items[0].Set(_header);
 	int index = 1;
 	if (_body.Count == 0)
 	{
-		r[index].Set(String::Empty);
+		items[index].Set(String::Empty);
 		++index;
 	}
 	else
 	{
 		for each(String^ s in _body)
 		{
-			r[index].Set(s);
+			items[index].Set(s);
 			++index;
 		}
 	}
@@ -63,12 +60,12 @@ CStr* Message::CreateBlock(int& outNbItems)
 	{
 		for each(String^ s in _buttons)
 		{
-			r[index].Set(s);
+			items[index].Set(s);
 			++index;
 		}
 	}
 
-	return r;
+	return items;
 }
 
 int Message::Show(MessageArgs^ args)
@@ -100,15 +97,15 @@ int Message::Show(MessageArgs^ args)
 		if (args->Buttons)
 			throw gcnew ArgumentException("Custom buttons cannot be used in GUI messages.");
 
-		if (!Configuration::GetBool(Configuration::DisableGui))
+		auto disableGui = Environment::GetEnvironmentVariable("FarNet:DisableGui");
+		if (!disableGui)
 			return ShowGui(args->Text, args->Caption, options);
 	}
 
 	// standard message box
 	Message m;
+	m._args = args;
 	m._flags = (int)options;
-	m._helpTopic = args->HelpTopic;
-	m._position = args->Position;
 
 	// text width
 	int maxTextWidth = Far::Api->UI->WindowSize.X - 16;
@@ -135,7 +132,7 @@ int Message::Show(MessageArgs^ args)
 	}
 
 	// dialog box?
-	if (m._position.HasValue || needButtonList)
+	if (m._args->Position.HasValue || needButtonList)
 		return m.ShowDialog(maxTextWidth, needButtonList);
 
 	// message box
@@ -203,7 +200,7 @@ int Message::ShowDialog(int maxTextWidth, bool needButtonList)
 	}
 
 	// dialog place
-	Point position = _position.HasValue ? _position.Value : Point(-1, -1);
+	Point position = _args->Position.HasValue ? _args->Position.Value : Point(-1, -1);
 	int x1 = position.X;
 	if (x1 >= size.X)
 		x1 = size.X - w - 1;
@@ -214,8 +211,9 @@ int Message::ShowDialog(int maxTextWidth, bool needButtonList)
 	int y2 = y1 < 0 ? h : y1 + h - 1;
 
 	// dialog
-	IDialog^ dialog = Far::Api->CreateDialog(x1, y1, x2, y2);
-	dialog->HelpTopic = _helpTopic;
+	auto dialog = Far::Api->CreateDialog(x1, y1, x2, y2);
+	dialog->TypeId = _args->TypeId;
+	dialog->HelpTopic = _args->HelpTopic;
 	dialog->IsWarning = (_flags & FMSG_WARNING);
 	dialog->AddBox(3, 1, w - 4, h - 2, _header);
 

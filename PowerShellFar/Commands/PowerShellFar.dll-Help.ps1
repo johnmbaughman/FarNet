@@ -1,4 +1,3 @@
-
 <#
 .Synopsis
 	Help script (https://github.com/nightroman/Helps)
@@ -13,45 +12,70 @@ Set-StrictMode -Version Latest
 Checks for the conditions and stops invocation if any of them is evaluated to false.
 '@
 	description = @'
-If the assertion fails then an error dialog is shown with several options.
+If the assertion fails, a dialog is shown with several options.
 A running macro, if any, is stopped before showing the dialog.
-'@,
-	@'
-If the parameter Title is provided then just a simple message is shown on
-failures, all the assertion details are omitted. This mode is suitable for
-production scripts.
+
+Use the parameter Title for simple messages without assertion details
+with only two options Stop and Throw without Ignore, Debug, Edit.
+
+ACTIONS
+
+	[Stop], [Esc]
+		Stop running PowerShell commands.
+
+	[Throw]
+		Throw 'Assertion failed.' error.
+
+	[Ignore]
+		Continue running commands.
+
+	[Debug]
+		Break into an attached debugger, if any.
+		Otherwise ask to attach a debugger and repeat.
+
+	[Edit]
+		Stop commands and open the editor at the assert.
+		(when the source script is available)
 '@
 	parameters = @{
-		Conditions = @'
+		Value = @'
 One or more condition values to be checked. If any value is evaluated to false
-(null, 0, empty string or collection) then an assertion dialog is shown.
+by PowerShell (null, 0, empty string, etc.) then an assertion dialog is shown.
 
-If Conditions is a single script block then it is invoked in order to get at
-least one condition value. Consider to use script blocks if they should be
-invoked and checked after conditions defined by other parameters.
+If it is a collection then all items are checked as conditions.
 
-If Conditions is a collection then its every item is checked as a condition.
+With Eq, it is the value compared with Eq.
+'@
+		Eq = @'
+Specifies the value compared with Value by Object.Equals().
+
+`Assert-Far X -eq Y` is not the same as `Assert-Far (X -eq Y)`. The first
+uses Object.Equals(). The second uses the PowerShell operator -eq, which is
+case insensitive, converts types, has different meaning when X is collection.
 '@
 		Message = @'
-Specifies a user friendly message to be shown on failures or a script block to
-be invoked on failures in order to get a message.
+Specifies a user friendly message shown on failures or a script block invoked
+on failures in order to get a message.
 '@
 		Title = @'
 Specifies a message box title and tells to show a simplified message box with
-less options and diagnostics. Normally such a dialog box is used in order to
-tell a user some requirements, not report internal issues.
+less options and diagnostics. Such a dialog normally tells what to do instead
+of where the problem is.
 '@
 		FileDescription = 'Specifies the expected current panel file description.'
 		FileName = 'Specifies the expected current panel file name.'
 		FileOwner = 'Specifies the expected current file owner.'
 		Dialog = 'Checks the current window is dialog.'
 		Editor = 'Checks the current window is editor.'
+		EditorFileName = 'Checks the current editor file name wildcard.'
+		EditorTitle = 'Checks the current editor title wildcard.'
 		Panels = 'Checks the current window is panels.'
 		Viewer = 'Checks the current window is viewer.'
-		Plugin = 'Checks the active panel is plugin.'
-		Plugin2 = 'Checks the passive panel is plugin.'
-		Native = 'Checks the active panel is native (not plugin).'
-		Native2 = 'Checks the passive panel is native (not plugin).'
+		Plugin = 'Checks the panel is plugin.'
+		Native = 'Checks the panel is not plugin.'
+		Passive = 'Tells using the passive panel.'
+		DialogTypeId = 'Checks the current window is dialog with the specified type ID.'
+		ExplorerTypeId = 'Checks the panel explorer with the specified type ID.'
 	}
 
 	examples = @(
@@ -62,22 +86,20 @@ tell a user some requirements, not report internal issues.
 		@{code={
 	# Single checks
 	Assert-Far -Panels
-	Assert-Far -Plugin
 	Assert-Far ($Far.Window.Kind -eq 'Panels')
+	Assert-Far $Far.Window.Kind -eq ([FarNet.WindowKind]::Panels)
 		}}
 		@{code={
 	# Combined checks
 	Assert-Far -Panels -Plugin
-	Assert-Far -Panels ($Far.Panel.IsPlugin)
 	Assert-Far @(
 		$Far.Window.Kind -eq 'Panels'
 		$Far.Panel.IsPlugin
 	)
 		}}
 		@{code={
-	# User friendly error message. Mind use of -Message and -Title with switches:
-	Assert-Far -Panels -Message "Run this script from panels." -Title "Search-Regex"
-	Assert-Far ($Far.Window.Kind -eq 'Panels') "Run this script from panels." "Search-Regex"
+	# User friendly error message
+	Assert-Far -Panels -Message "Run this script from panels." -Title Search-Regex.ps1
 		}}
 	)
 }
@@ -155,16 +177,44 @@ tell a user some requirements, not report internal issues.
 ### Search-FarFile
 @{
 	command = 'Search-FarFile'
-	synopsis = 'Searches files in the panel and opens the result panel with found items.'
+	synopsis = 'Searches module panel files and opens the result panel with found items.'
+	description = @'
+This command searches for FarNet module panel files.
+It is similar to FarNet.Explore `explore:`.
+
+If the panel is not FarNet then the file system is used.
+(FarNet.Tools.FileSystemExplorer)
+
+This command is particularly useful with a script filter.
+The script is called for each file with two arguments:
+$args[0] as file explorer and $args[1] as the file.
+The script returns Boolean or equivalent.
+See examples.
+'@
 	parameters = @{
-		Mask = 'Classic Far Manager file mask including exclude and regular expression forms.'
-		Script = 'Search script. Variables: $this is the explorer providing the file, $_ is the file.'
+		Mask = 'Far Manager file mask including exclude and regular expression forms.'
+		Script = 'Filter script with $args[0] as file explorer and $args[1] as the file.'
+		Exclude = 'Mask or script which excludes directories from getting their files.'
+		Path = 'Specifies the root directory for the file system search.'
+		Directory = 'Tells to include only directories.'
+		File = 'Tells to include only files.'
+		Bfs = 'Tells to use breadth-first-search. Ignored in XPath searches.'
+		Depth = 'Search depth. Zero for just root, negative for unlimited (default).'
 		XPath = 'XPath expression text.'
 		XFile = 'XPath expression file.'
-		Depth = 'Search depth. 0: ignored; negative: unlimited.'
-		Directory = 'Tells to include directories into the search process and results.'
-		Recurse = 'Tells to search through all directories and sub-directories.'
-		Asynchronous = 'Tells to performs the search in the background and to open the result panel immediately.'
+		Async = 'Tells to search in the background and open the result panel immediately.'
+	}
+	examples = @{
+		code = {
+			# find using Mask
+			Search-FarFile README*
+
+			# find large files
+			Search-FarFile -File -Exclude 'bin,obj' {$args[1].Length -ge 5mb}
+
+			# find empty directories
+			Search-FarFile -Directory {param($e, $f) !(Get-ChildItem -LiteralPath "$($e.Location)\$($f.name)")}
+		}
 	}
 }
 
@@ -200,11 +250,13 @@ choice buttons and just shows a message.
 ### Start-FarJob
 @{
 	command = 'Start-FarJob'
-	synopsis = 'Starts a new background job (not classic PowerShell job).'
+	synopsis = 'Starts a new background job (not native PowerShell job).'
 	description = @'
-It creates a background job with specified parameters. Note: these jobs are not
-native PowerShell background jobs. They are much simpler. They are designed for
-commands with no output or output suitable for viewing as formatted text.
+It starts a new background job with the specified arguments or parameters.
+
+Far jobs run in separated workspaces in the same process. They take live input
+objects and may return live output. (Compare with PowerShell jobs: they run in
+separate processes and deal with serialized input and output.)
 '@
 	parameters = @{
 		Command = 'A command name or a script block.'
@@ -232,15 +284,6 @@ $BaseFile = @{
 		All = 'Tells to get all the panel items.'
 		Passive = 'Tells to get items from the passive panel.'
 		Selected = 'Tells to get selected panel items or the current one if none is selected.'
-	}
-}
-
-### Get-FarFile
-Merge-Helps $BaseFile @{
-	command = 'Get-FarFile'
-	synopsis = 'Gets the current panel file, selected files, or all files.'
-	outputs = @{
-		type = 'FarNet.FarFile'
 	}
 }
 
@@ -328,9 +371,9 @@ $BasePanel = @{
 		Data = @'
 Specifies any object which is used later by custom panel event handlers.
 '@
-		IdleUpdate = @'
-Tells to update the panel periodically when idle. This is useful for panel
-objects that change their properties over time, e.g. system processes.
+		TimerUpdate = @'
+Tells to update the panel on timer events and specifies the interval in
+milliseconds. Useful for objects changing their properties over time.
 '@
 		DataId = @'
 Specifies the custom data ID used to distinguish files by their data.
@@ -380,6 +423,8 @@ Keys are case insensitive and can be shortened, even to their first letters.
 	Expression
 		Property name (string) or a calculated property (script block operating
 		on input object $_). Name/Label is normally also used for a script block.
+
+		If scripts use variables from the current context, use `GetNewClosure()`.
 
 	Name or Label
 		Display name for a value from a script block or alternative name for a
@@ -433,12 +478,17 @@ directly, instead input objects come from the pipeline.
 '@
 		ExcludeMemberPattern = 'Regular expression pattern of members to be excluded in a child list panel.'
 		HideMemberPattern = 'Regular expression pattern of members to be hidden in a child list panel.'
-		Append = 'Tells to append objects to the active object panel. Other parameters are ignored.'
+		Return = 'Tells to return the panel without opening.'
 	}
 
 	inputs = @{
 		type = '[object]'
 		description = 'Any objects to be shown as panel files.'
+	}
+
+	outputs = @{
+		type = '[PowerShellFar.ObjectPanel]'
+		description = 'With Return, the created panel, not yet opened.'
 	}
 
 	examples = @(
@@ -471,6 +521,7 @@ $BaseMenu = @{
 		AutoAssignHotkeys = 'Sets IAnyMenu.AutoAssignHotkeys'
 		Bottom = 'Sets IAnyMenu.Bottom'
 		HelpTopic = 'Sets IAnyMenu.HelpTopic'
+		NoShadow = 'Sets IAnyMenu.NoShadow'
 		Selected = 'Sets IAnyMenu.Selected'
 		SelectLast = 'Sets IAnyMenu.SelectLast'
 		ShowAmpersands = 'Sets IAnyMenu.ShowAmpersands'
@@ -487,11 +538,14 @@ Merge-Helps $BaseMenu @{
 	parameters = @{
 		ReverseAutoAssign = 'Sets IMenu.ReverseAutoAssign'
 		ChangeConsoleTitle = 'Sets IMenu.ChangeConsoleTitle'
-		Show = 'Tells to show immediately. In this case nothing is returned and all actions are done by item event handlers.'
+		NoBox = 'Sets IMenu.NoBox'
+		NoMargin = 'Sets IMenu.NoMargin'
+		SingleBox = 'Sets IMenu.SingleBox'
+		Show = 'Tells to show immediately. Nothing is returned, actions are done by item event handlers.'
 	}
 	outputs = @{
 		type = 'FarNet.IMenu or none'
-		description = 'A new menu object or none if the Show switch is used.'
+		description = 'A new menu object or none if Show is used.'
 	}
 }
 
@@ -501,7 +555,6 @@ $FarList = Merge-Helps $BaseMenu @{
 		AutoSelect = 'Sets IListMenu.AutoSelect'
 		Incremental = 'Sets IListMenu.Incremental'
 		IncrementalOptions = 'Sets IListMenu.IncrementalOptions'
-		NoShadow = 'Sets IListMenu.NoShadow'
 		ScreenMargin = 'Sets IListMenu.ScreenMargin'
 		UsualMargins = 'Sets IListMenu.UsualMargins'
 		Popup = 'Popup-list style. Uses $Psf.Settings.Popup* options.'
@@ -539,64 +592,171 @@ Example: 'FullName' or {$_.FullName} tell to use a property FullName.
 	}
 }
 
-### Invoke-FarStepper
+### Start-FarTask
 @{
-	command = 'Invoke-FarStepper'
-	synopsis = 'Invokes sequences of asynchronous macro and script block steps.'
+	command = 'Start-FarTask'
+	synopsis = 'Starts the script task.'
 	description = @'
-This cmdlet provides a simple way to invoke stepper scripts. For more complex
-scenarios with stepping events use the class [PowerShellFar.Stepper] directly.
+	This cmdlet starts the specified script task. File script parameters are
+	defined in the script and specified for Start-FarTask as its own. Known
+	issue: switch parameters must be specified after Script.
+
+	If the script is a script block or code then parameters are not supported.
+	Use the parameter Data in order to import specified variables to the task
+	automatic hashtable $Data.
+
+	The script is invoked in a new runspace asynchronously without blocking the
+	main thread. The code must not work with FarNet directly, it should use job
+	blocks instead. Jobs are invoked in the main session.
+
+	The task and jobs may exchange data using the automatic hashtable $Data.
+
+	The cmdlet returns nothing by default and the script output is ignored. Use
+	the switch AsTask in order to return the started task. Use it in a calling
+	async scenario and get the script output as the task result, object[].
+
+	JOBS AND MACROS
+
+	job [-Arguments ...] [-Script] {...}
+
+		This job works with FarNet and may output data as usual. Special case:
+		if the output is a task then this task is awaited and its result is
+		returned instead.
+
+	ps: [-Arguments ...] [-Script] {...}
+
+		This job is used for console output as if its commands are invoked from
+		the command line. It returns nothing because the output is sent to the
+		console.
+
+	run [-Arguments ...] [-Script] {...}
+
+		This job is used to run modal UI without blocking the task.
+		It is useful for automation and tests. Output is ignored.
+
+	keys <keys> [<keys> [...]]
+
+		This command invokes the specified keys.
+		Arguments are concatenated with spaces.
+
+	macro <code>
+
+		This command invokes the specified macro.
 '@
 	parameters = @{
-		Path = @'
-A script that gets macros and script blocks. Use either full paths or just
-names of scripts in the system path. Use of relative paths is not recommended
-with more than one unit.
+		Script = 'Specifies the task as script file, block, or code.'
+		AsTask = 'Tells to return the started task.'
+		Data = @'
+The list of variable names or hashtables exposed as the task variable $Data.
+
+If an item is variable name then it is added to $Data as {name, value}.
+The variable must exist and its name must be unique as $Data key.
+
+If an item is hashtable then its entries are merged into $Data overriding
+existing with same names.
 '@
-		Ask = @'
-Tells to ask a user to choose an action before each step.
-This mode is used for troubleshooting, demonstrations, and etc.
+		AddDebugger = @'
+Tells to use Add-Debugger.ps1 and specifies its parameters as dictionary.
+The parameter Path is required. Example:
+
+	Start-FarTask ... -AddDebugger @{
+		Path = "$env:TEMP\debug.log"
+		Environment = 'AddDebugger'
+		Context = 10
+	}
+
+Use Step in addition or set some breakpoints.
+Otherwise, the debugger is not going to stop.
+
+Get Add-Debugger.ps1 from PSGallery -- https://www.powershellgallery.com/packages/Add-Debugger
+'@
+		Step = @'
+Tells to set breakpoints for stopping at each step: `job`, `ps:`, `run`, `keys`, `macro`.
 '@
 	}
 
-	inputs = @(
-		@{
-			type = 'System.String'
-			description = 'Literal stepper script paths. See the Path parameter.'
-		}
-		@{
-			type = 'System.IO.FileInfo'
-			description = 'File items, for example output of Get-*Item cmdlets.'
-		}
-	)
+	outputs = @{
+		type = 'System.Threading.Tasks.Task[object[]]'
+		description = 'With AsTask, the started task.'
+	}
 
-	examples = @(
-		@{code={
-	# Invoke the current panel file by the stepper
-	Invoke-FarStepper -Path (Get-FarPath)
-		}}
-		@{code={
-	# Invoke the test from Bench\Text with confirmations
-	Invoke-FarStepper .\Test-Stepper..ps1 -Ask
-		}}
+	links = @(
+		@{ text = 'Samples -- https://github.com/nightroman/FarNet/tree/main/PowerShellFar/Samples/FarTask' }
 	)
 }
 
-### Invoke-Far
-@{
-	command = 'Invoke-Far'
-	synopsis = 'Prompts to input a command and invokes it.'
-	description = @'
-	This cmdlet shows the usual input command dialog and then invokes commands.
-	Unlike the mode called from the menu, it is designed for macros and scripts.
-	And it provides some optional parameters.
+$BaseRegister = @{
+	parameters = @{
+		Id = 'The action GUID.'
+		Name = 'The name for UI.'
+	}
+}
 
-	- Output is shown in the console, this is suitable for output with colors.
-	- Commands are added to edit box histories but not to the command history.
+### Register-FarCommand
+Merge-Helps $BaseRegister @{
+	command = 'Register-FarCommand'
+	synopsis = 'Registers the command handler invoked from the command line by its prefix.'
+	description = @'
+	This command wraps IModuleManager.RegisterCommand, see FarNet API.
 '@
 	parameters = @{
-		Prompt = 'Prompt text. Default: the result of the function `prompt`.'
-		History = 'Edit box history string.'
-		Title = 'Title of the box.'
+		Prefix = @'
+		Specifies the command prefix.
+'@
+		Handler = @'
+		Processes the command which text is provided as `$_.Command`.
+'@
 	}
+	links = @(
+		@{ text = 'https://github.com/nightroman/FarNet/blob/main/PowerShellFar/Samples/Tests/Test-RegisterCommand.far.ps1' }
+	)
+}
+
+### Register-FarDrawer
+Merge-Helps $BaseRegister @{
+	command = 'Register-FarDrawer'
+	synopsis = 'Registers the editor drawer handler.'
+	description = @'
+	This command wraps IModuleManager.RegisterDrawer, see FarNet API.
+'@
+	parameters = @{
+		Mask = @'
+		Specifies the Far Manager file mask.
+'@
+		Priority = @'
+		Specifies color priority.
+'@
+		Handler = @'
+		Processes text rendering events with:
+		$this - current editor [FarNet.IEditor]
+		$_ [FarNet.ModuleDrawerEventArgs]:
+		$_.Colors - result color collection
+		$_.Lines - lines to get colors for
+		$_.StartChar - the first character
+		$_.EndChar - after the last character
+'@
+	}
+	links = @(
+		@{ text = 'https://github.com/nightroman/FarNet/blob/main/PowerShellFar/Samples/Tests/Test-RegisterDrawer.far.ps1' }
+	)
+}
+
+### Register-FarTool
+Merge-Helps $BaseRegister @{
+	command = 'Register-FarTool'
+	synopsis = 'Registers the tool handler invoked from one of Far menus.'
+	description = @'
+	This command wraps IModuleManager.RegisterTool, see FarNet API.
+'@
+	parameters = @{
+		Options = @'
+		The tool options with at least one target area specified.
+'@
+		Handler = @'
+		Processes the command which text is provided as `$_.Command`.
+'@
+	}
+	links = @(
+		@{ text = 'https://github.com/nightroman/FarNet/blob/main/PowerShellFar/Samples/Tests/Test-RegisterTool.far.ps1' }
+	)
 }

@@ -1,129 +1,103 @@
-
 <#
 .Synopsis
-	Build script (https://github.com/nightroman/Invoke-Build)
+	Build script, https://github.com/nightroman/Invoke-Build
 #>
 
 param(
-	$FarHome = (property FarHome C:\Bin\Far\x64),
-	$Configuration = (property Configuration Release)
+	$Configuration = (property Configuration Release),
+	$FarHome = (property FarHome C:\Bin\Far\x64)
 )
 
+Set-StrictMode -Version 3
 $ModuleName = 'FSharpFar'
-$ProjectRoot = 'src'
-$ProjectName = "$ModuleName.fsproj"
+$ModuleRoot = "$FarHome\FarNet\Modules\$ModuleName"
+$Description = 'F# scripting and interactive services in Far Manager.'
 
-task Init Meta, {
-	exec {paket.exe install}
+task build meta, {
+	exec { dotnet build "src\$ModuleName.sln" -c $Configuration "/p:FarHome=$FarHome" }
 }
 
-task Kill Clean, {
-	remove @(
-		'packages'
-		'paket-files'
-		'src\.vs'
-		'src\Directory.Build.props'
-	)
+task publish {
+	exec { dotnet publish "src\$ModuleName\$ModuleName.fsproj" -c $Configuration -o $ModuleRoot --no-build }
+
+	$xml = [xml](Get-Content "src\$ModuleName\$ModuleName.fsproj")
+	$node = $xml.SelectSingleNode('Project/ItemGroup/PackageReference[@Include="FSharp.Core"]')
+	Copy-Item "$HOME\.nuget\packages\FSharp.Core\$($node.Version)\lib\netstandard2.1\FSharp.Core.xml" $ModuleRoot
+
+	# used to be deleted, now missing: runtimes\unix
+	Set-Location $ModuleRoot
+	remove *.deps.json, cs, de, es, fr, it, ja, ko, pl, pt-BR, ru, tr, zh-Hans, zh-Hant
 }
 
-# (@1) Use MSBuild to work around missed assembly version
-# see https://github.com/Microsoft/visualfsharp/issues/3113
-task Build {
-	# dotnet build misses version info (@1)
-	#exec {dotnet build $ProjectRoot\$ModuleName.sln /p:FarHome=$FarHome /p:Configuration=$Configuration /v:n}
-
-	# workaround (@1)
-	Set-Alias MSBuild (Resolve-MSBuild x86)
-	exec {dotnet restore $ProjectRoot\$ModuleName.sln}
-	exec {MSBuild $ProjectRoot\$ModuleName.sln /p:FarHome=$FarHome /p:Configuration=$Configuration /v:n}
-}
-
-task Clean {
+task clean {
 	remove @(
 		'z'
 		'README.htm'
-		'src\FSharpFar.fs.ini'
 		"FarNet.$ModuleName.*.nupkg"
-		"$ProjectRoot\*\bin"
-		"$ProjectRoot\*\obj"
+		"src\*\bin"
+		"src\*\obj"
 	)
 }
 
-task Markdown {
-	function Convert-Markdown($Name) {pandoc.exe --standalone --from=gfm "--output=$Name.htm" "--metadata=pagetitle=$Name" "$Name.md"}
-	exec { Convert-Markdown README }
-}
-
-task Version {
+task version {
 	($script:Version = switch -regex -file History.txt {'^= (\d+\.\d+\.\d+) =$' {$matches[1]; break}})
 }
 
-task Meta -Inputs .build.ps1, History.txt -Outputs src/Directory.Build.props -Jobs Version, {
+task meta -Inputs .build.ps1, History.txt -Outputs src/Directory.Build.props -Jobs version, {
 	Set-Content src/Directory.Build.props @"
 <Project>
 	<PropertyGroup>
 		<Company>https://github.com/nightroman/FarNet</Company>
 		<Copyright>Copyright (c) Roman Kuzmin</Copyright>
-		<Description>F# interactive, scripting, compiler, and editor services for Far Manager.</Description>
+		<Description>$Description</Description>
 		<Product>FarNet.FSharpFar</Product>
 		<Version>$Version</Version>
-		<FileVersion>$Version</FileVersion>
-		<AssemblyVersion>$Version</AssemblyVersion>
 	</PropertyGroup>
 </Project>
 "@
 }
 
-task Package Markdown, {
-	$toHome = "z\tools\FarHome"
-	$toFarNet = "z\tools\FarHome\FarNet"
-	$toModule = "$toHome\FarNet\Modules\$ModuleName"
-	$fromModule = "$FarHome\FarNet\Modules\$ModuleName"
+task markdown {
+	assert (Test-Path $env:MarkdownCss)
+	exec { pandoc.exe @(
+		'README.md'
+		'--output=README.htm'
+		'--from=gfm'
+		'--embed-resources'
+		'--standalone'
+		"--css=$env:MarkdownCss"
+		"--metadata=pagetitle=$ModuleName"
+	)}
+}
 
+task package markdown, {
 	remove z
-	$null = mkdir $toModule
+	$toModule = mkdir "z\tools\FarHome\FarNet\Modules\$ModuleName"
 
-	Copy-Item -Destination $toHome @(
-		"$FarHome\FSharp.Core.dll"
-		"$FarHome\FSharp.Core.optdata"
-		"$FarHome\FSharp.Core.sigdata"
+	# module
+	exec { robocopy $ModuleRoot $toModule /s /xf *.pdb } (0..2)
+	equals 10 (Get-ChildItem $toModule -Recurse -File).Count
+
+	# meta
+	Copy-Item -Destination z @(
+		'README.md'
+		'..\Zoo\FarNetLogo.png'
 	)
 
-	Copy-Item -Destination $toFarNet @(
-		"$FarHome\FarNet\FarNet.FSharp.dll"
-		"$FarHome\FarNet\FarNet.FSharp.xml"
-	)
-
+	# repo
 	Copy-Item -Destination $toModule @(
 		'README.htm'
 		'History.txt'
-		'LICENSE.txt'
-		"$fromModule\$ModuleName.dll"
-		"$fromModule\FSharp.Compiler.Service.dll"
-		"$fromModule\System.Reflection.Metadata.dll"
-		"$fromModule\System.ValueTuple.dll"
+		'..\LICENSE'
 	)
 }
 
-#! dotnet made assembly: FileVersion is null (@1); so we used this command:
-# ($dllVersion = [Reflection.Assembly]::ReflectionOnlyLoadFrom($dllPath).GetName().Version.ToString())
-task NuGet Package, Version, {
+task nuget package, version, {
 	# test versions
-	$dllPath = "$FarHome\FarNet\Modules\$ModuleName\$ModuleName.dll"
+	$dllPath = "$ModuleRoot\$ModuleName.dll"
 	($dllVersion = (Get-Item $dllPath).VersionInfo.FileVersion.ToString())
-	assert $dllVersion.StartsWith($Version) 'Versions mismatch.'
+	assert $dllVersion.StartsWith("$Version.") 'Versions mismatch.'
 
-	$text = @'
-F# interactive, scripting, compiler, and editor services for Far Manager.
-
----
-
-To install FarNet packages, follow these steps:
-
-https://raw.githubusercontent.com/nightroman/FarNet/master/Install-FarNet.en.txt
-
----
-'@
 	# nuspec
 	Set-Content z\Package.nuspec @"
 <?xml version="1.0"?>
@@ -133,23 +107,36 @@ https://raw.githubusercontent.com/nightroman/FarNet/master/Install-FarNet.en.txt
 		<version>$Version</version>
 		<authors>Roman Kuzmin</authors>
 		<owners>Roman Kuzmin</owners>
-		<projectUrl>https://github.com/nightroman/FarNet/tree/master/FSharpFar</projectUrl>
-		<iconUrl>https://raw.githubusercontent.com/wiki/nightroman/FarNet/images/FarNetLogo.png</iconUrl>
+		<projectUrl>https://github.com/nightroman/FarNet/tree/main/FSharpFar</projectUrl>
+		<icon>FarNetLogo.png</icon>
+		<readme>README.md</readme>
 		<license type="expression">BSD-3-Clause</license>
-		<requireLicenseAcceptance>false</requireLicenseAcceptance>
-		<summary>$text</summary>
-		<description>$text</description>
-		<releaseNotes>https://raw.githubusercontent.com/nightroman/FarNet/master/FSharpFar/History.txt</releaseNotes>
+		<description>$Description</description>
+		<releaseNotes>https://github.com/nightroman/FarNet/blob/main/FSharpFar/History.txt</releaseNotes>
 		<tags>FarManager FarNet Module FSharp</tags>
 	</metadata>
 </package>
 "@
 	# pack
-	exec { NuGet pack z\Package.nuspec -NoPackageAnalysis }
+	exec { NuGet pack z\Package.nuspec }
 }
 
-task path {
-	Add-Path tools, packages\FSharp.Compiler.Service.ProjectCracker\utilities\net45
+task test_testing {
+	Start-Far "fs: exec: file=$env:FarNetCode\FSharpFar\samples\Testing\App1.fsx" -ReadOnly -Title Testing -Environment @{QuitFarAfterTests=1}
 }
 
-task . Build, Clean
+task test_tests {
+	Start-Far "fs: exec: file=$env:FarNetCode\FSharpFar\tests\App1.fsx" -ReadOnly -Title Tests -Environment @{QuitFarAfterTests=1}
+}
+
+task test_tasks {
+	Start-Far "ps: Test.far.ps1 * -Quit" $env:FarNetCode\FSharpFar\tests\PSF.test -ReadOnly -Title FSharpFar\PSF.test
+}
+
+task test_fsx {
+	Invoke-Build Test src\fsx\.build.ps1
+}
+
+task test test_tasks, test_tests, test_testing, test_fsx
+
+task . build, clean

@@ -1,4 +1,3 @@
-
 <#
 .Synopsis
 	Build script (https://github.com/nightroman/Invoke-Build)
@@ -8,29 +7,27 @@ param(
 	$FarHome = (property FarHome)
 )
 
-$Builds = @(
-	'Backslash\.build.ps1'
-	'EditorKit\.build.ps1'
-	'FarNet.Demo\.build.ps1'
-	'TryPanelCSharp\.build.ps1'
-)
+$Builds = Get-Item *\*.build.ps1
 
-task TestBuild {
+task testBuild {
 	# build
 	$FarNetModules = 'C:\TEMP\z'
-	foreach($_ in $Builds) { Invoke-Build Build $_ }
+	foreach($_ in $Builds) { Invoke-Build build $_ }
 
 	# test
 	assert (Test-Path $FarNetModules\Backslash\Backslash.dll)
-	assert (Test-Path $FarNetModules\EditorKit\EditorKit.dll)
-	assert ((Get-Item $FarNetModules\FarNet.Demo\*).Count -eq 5)
+	equals (Get-Item $FarNetModules\FarNet.Demo\*).Count 6
+	assert (Test-Path $FarNetModules\IronPythonFar\IronPythonFar.dll)
 	assert (Test-Path $FarNetModules\TryPanelCSharp\TryPanelCSharp.dll)
 
 	# clean
-	Remove-Item $FarNetModules -Recurse -Force
+	remove $FarNetModules
 },
-Clean
+clean
 
-task Clean {
-	foreach($_ in $Builds) { Invoke-Build Clean $_ }
+task clean {
+	foreach($_ in $Builds) { Invoke-Build clean $_ }
+	remove *\obj
 }
+
+task . testBuild

@@ -1,5 +1,6 @@
+# FolderChart
 
-# FarNet module *FolderChart*
+FarNet module FolderChart for Far Manager
 
 ## Synopsis
 
@@ -8,7 +9,7 @@ and shows the results as a chart in a separate window with some interaction.
 
 **Project**
 
- * Source: <https://github.com/nightroman/FarNet/tree/master/FolderChart>
+ * Source: <https://github.com/nightroman/FarNet/tree/main/FolderChart>
  * Author: Roman Kuzmin
 
 ***
@@ -17,14 +18,13 @@ and shows the results as a chart in a separate window with some interaction.
 **Requirements**
 
  * Far Manager
- * Plugin FarNet
- * .NET Framework 4.0
+ * Package FarNet
+ * Package FarNet.FolderChart
 
 **Instructions**
 
-How to get, install, and update from the NuGet package *FarNet.FolderChart*
-
-<https://raw.githubusercontent.com/nightroman/FarNet/master/Install-FarNet.en.txt>
+How to install and update FarNet and modules:\
+<https://github.com/nightroman/FarNet#readme>
 
 ***
 ## Description

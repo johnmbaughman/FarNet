@@ -1,84 +1,60 @@
 ﻿
-/*
-FarNet module RightWords
-Copyright (c) 2011-2016 Roman Kuzmin
-*/
+// FarNet module RightWords
+// Copyright (c) Roman Kuzmin
 
 using System;
-using System.Configuration;
 using System.Text.RegularExpressions;
-using FarNet.Settings;
-namespace FarNet.RightWords
+
+namespace FarNet.RightWords;
+
+public sealed class Settings : ModuleSettings<Settings.Data>
 {
-	[SettingsProvider(typeof(ModuleSettingsProvider))]
-	public sealed class Settings : ModuleSettings
+	internal const string ModuleName = "RightWords";
+	internal const string UserFile = "RightWords.dic";
+
+	public static Settings Default { get; } = new Settings();
+
+	public class Data : IValidate
 	{
-		internal const string ModuleName = "RightWords";
-		internal const string UserFile = "RightWords.dic";
-		static readonly Settings _Default = new Settings();
-		public static Settings Default { get { return _Default; } }
-		[UserScopedSetting]
-		[SettingsManageability(SettingsManageability.Roaming)]
-		public string SkipPattern
+		public XmlCData WordRegex { get; set; } = @"[\p{Lu}\p{Ll}]\p{Ll}+";
+
+		public XmlCData SkipRegex { get; set; }
+
+		public ConsoleColor HighlightingForegroundColor { get; set; } = ConsoleColor.Black;
+
+		public ConsoleColor HighlightingBackgroundColor { get; set; } = ConsoleColor.Yellow;
+
+		public string UserDictionaryDirectory { get; set; }
+
+		public int MaximumLineLength { get; set; } = 0;
+
+		internal Regex WordRegex2 { get; private set; }
+		internal Regex SkipRegex2 { get; private set; }
+		public void Validate()
 		{
-			get { return (string)this["SkipPattern"]; }
-			set { this["SkipPattern"] = value; }
-		}
-		[UserScopedSetting]
-		[DefaultSettingValue(@"[\p{Lu}\p{Ll}]\p{Ll}+")] // \p{Lu}?\p{Ll}+
-		[SettingsManageability(SettingsManageability.Roaming)]
-		public string WordPattern
-		{
-			get { return (string)this["WordPattern"]; }
-			set { this["WordPattern"] = value; }
-		}
-		[UserScopedSetting]
-		[DefaultSettingValue("Yellow")]
-		[SettingsManageability(SettingsManageability.Roaming)]
-		public ConsoleColor HighlightingBackgroundColor
-		{
-			get { return (ConsoleColor)this["HighlightingBackgroundColor"]; }
-			set { this["HighlightingBackgroundColor"] = value; }
-		}
-		[UserScopedSetting]
-		[DefaultSettingValue("Black")]
-		[SettingsManageability(SettingsManageability.Roaming)]
-		public ConsoleColor HighlightingForegroundColor
-		{
-			get { return (ConsoleColor)this["HighlightingForegroundColor"]; }
-			set { this["HighlightingForegroundColor"] = value; }
-		}
-		[UserScopedSetting]
-		[SettingsManageability(SettingsManageability.Roaming)]
-		public string UserDictionaryDirectory
-		{
-			get { return (string)this["UserDictionaryDirectory"]; }
-			set { this["UserDictionaryDirectory"] = value; }
-		}
-		[UserScopedSetting]
-		[DefaultSettingValue("0")]
-		[SettingsManageability(SettingsManageability.Roaming)]
-		public int MaximumLineLength
-		{
-			get { return (int)this["MaximumLineLength"]; }
-			set { this["MaximumLineLength"] = value; }
-		}
-		[System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA1806:DoNotIgnoreMethodResults")]
-		public override void Save()
-		{
-			if (!string.IsNullOrEmpty(SkipPattern))
+			if (string.IsNullOrWhiteSpace(WordRegex))
+				throw new ModuleException("WordRegex cannot be empty.");
+
+			try
 			{
-				try { new Regex(SkipPattern, RegexOptions.IgnorePatternWhitespace); }
-				catch (ArgumentException ex) { throw new ModuleException("Invalid skip pattern: " + ex.Message); }
+				WordRegex2 = new Regex(WordRegex);
+			}
+			catch (ArgumentException ex)
+			{
+				throw new ModuleException($"WordRegex: {ex.Message}");
 			}
 
-			if (WordPattern == null || WordPattern.Trim().Length == 0)
-				throw new ModuleException("Empty word pattern is invalid.");
-
-			try { new Regex(WordPattern, RegexOptions.IgnorePatternWhitespace); }
-			catch (ArgumentException ex) { throw new ModuleException("Invalid word pattern: " + ex.Message); }
-
-			base.Save();
+			if (!string.IsNullOrWhiteSpace(SkipRegex))
+			{
+				try
+				{
+					SkipRegex2 = new Regex(SkipRegex);
+				}
+				catch (ArgumentException ex)
+				{
+					throw new ModuleException($"SkipRegex: {ex.Message}");
+				}
+			}
 		}
 	}
 }

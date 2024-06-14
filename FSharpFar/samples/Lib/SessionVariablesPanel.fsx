@@ -4,7 +4,7 @@
 
     How to invoke for the required session:
 
-        fs: //exec with=.; file=...\SessionVariablesPanel.fsx
+        fs: exec: with=.; file=...\SessionVariablesPanel.fsx
 
     where `with=.` means the .fs.ini in the current panel, you may have to
     specify the actual session config path and the path to this script.
@@ -14,4 +14,4 @@
 open FarNet.FSharp
 
 // get session variables and send them to the panel
-PowerShellFar.invokeScript "$args[0] | Out-FarPanel" [| SessionVariables.getVariables () |]
+PSFar.Invoke("$args[0] | Out-FarPanel", [| SessionVariables.getVariables () |])

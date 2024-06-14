@@ -1,10 +1,8 @@
 
-/*
-FarNet plugin for Far Manager
-Copyright (c) 2006-2016 Roman Kuzmin
-*/
+// FarNet plugin for Far Manager
+// Copyright (c) Roman Kuzmin
 
-#include "StdAfx.h"
+#include "stdafx.h"
 #include "Far1.h"
 #include "CommandLine.h"
 #include "Dialog.h"
@@ -12,7 +10,6 @@ Copyright (c) 2006-2016 Roman Kuzmin
 #include "Far0.h"
 #include "History.h"
 #include "InputBox.h"
-#include "ListMenu.h"
 #include "Menu.h"
 #include "Message.h"
 #include "Panel0.h"
@@ -24,16 +21,6 @@ Copyright (c) 2006-2016 Roman Kuzmin
 
 namespace FarNet
 {;
-void Far1::Connect()
-{
-	// the instance
-	Far::Api = %Far;
-
-	// initialize data paths
-	_LocalData = Environment::GetEnvironmentVariable("FARLOCALPROFILE");
-	_RoamingData = Environment::GetEnvironmentVariable("FARPROFILE");
-}
-
 String^ Far1::CurrentDirectory::get()
 {
 	CBox box;
@@ -75,7 +62,7 @@ IMenu^ Far1::CreateMenu()
 
 IListMenu^ Far1::CreateListMenu()
 {
-	return gcnew ListMenu;
+	return gcnew Works::ListMenu;
 }
 
 FarNet::MacroArea Far1::MacroArea::get()
@@ -123,6 +110,13 @@ void Far1::CopyToClipboard(String^ text)
 	Info.FSF->CopyToClipboard(FCT_STREAM, pin);
 }
 
+//! Send OPEN_LUAMACRO as something not command or normal macro.
+void Far1::InvokeCommand(String^ command)
+{
+	PIN_NE(pin, command);
+	Far0::InvokeCommand(pin, OPEN_LUAMACRO);
+}
+
 IEditor^ Far1::CreateEditor()
 {
 	return gcnew FarNet::Editor;
@@ -150,14 +144,14 @@ String^ Far1::KeyInfoToName(KeyInfo^ key)
 {
 	INPUT_RECORD ir;
 	memset(&ir, 0, sizeof(ir));
-	
+
 	ir.EventType = KEY_EVENT;
 	ir.Event.KeyEvent.wVirtualKeyCode = (WORD)key->VirtualKeyCode;
 	ir.Event.KeyEvent.uChar.UnicodeChar = (WCHAR)key->Character;
 	ir.Event.KeyEvent.dwControlKeyState = (DWORD)key->ControlKeyState;
 	ir.Event.KeyEvent.bKeyDown = key->KeyDown;
 	ir.Event.KeyEvent.wRepeatCount = 1;
-	
+
 	const size_t size = 100;
 	wchar_t name[size] = {0};
 	if (!Info.FSF->FarInputRecordToName(&ir, name, size))
@@ -207,7 +201,7 @@ ILine^ Far1::Line::get()
 		if (combo)
 			return combo->Line;
 	}
-	
+
 	return nullptr;
 }
 
@@ -242,85 +236,62 @@ void Far1::ShowError(String^ title, Exception^ error)
 	if (!error)
 		return;
 
-	// stop a running macro
+	// stop running macros
 	String^ msgMacro = nullptr;
 	FarNet::MacroState macro = MacroState;
 	if (macro == FarNet::MacroState::Executing || macro == FarNet::MacroState::ExecutingCommon)
 	{
 		// log
-		msgMacro = "A macro has been stopped.";
+		msgMacro = "A macro was stopped.";
 		Log::Source->TraceEvent(TraceEventType::Warning, 0, msgMacro);
 
 		// stop
 		UI->Break();
 	}
 
-	// log
-	String^ info = Log::TraceException(error);
+	// unwrap
+	error = Works::Kit::UnwrapAggregateException(error);
 
-	// case: not loaded
-	//! non-stop loading
-	//! no UI on unloading
-	if (Works::Host::State != Works::HostState::Loaded)
-	{
-		//! trace the full string, so that a user can report this
-		Log::TraceError(error->ToString());
-
-		// info to show
-		if (!info)
-			info = Log::FormatException(error);
-
-		// with title
-		info += title + Environment::NewLine;
-
-		if (Works::Host::State == Works::HostState::Loading)
-			Far::Api->UI->Write(info, ConsoleColor::Red);
-		else
-			Far::Api->Message(info + Environment::NewLine + error->ToString(), title, (MessageOptions::Gui | MessageOptions::Warning));
-
-		return;
-	}
-
-	// quiet: CtrlBreak in a dialog
+	// quietly ignore PowerShell stopped pipelines, they are like cancels
 	if (error->GetType()->FullName == "System.Management.Automation.PipelineStoppedException") //_110128_075844
 		return;
 
-	// ask
-	int res = Message(
-		error->Message,
-		String::IsNullOrEmpty(title) ? error->GetType()->FullName : title,
-		MessageOptions::LeftAligned | MessageOptions::Warning,
-		gcnew array<String^>{"Ok", "More"});
-	if (res < 1)
+	// trace
+	Log::TraceException(error);
+
+	// case: loaded
+	if (g_AppState == AppState::Loaded)
+	{
+		Works::ErrorDialog::Show(title, error, msgMacro);
 		return;
+	}
 
-	// info to show
-	if (!info)
-		info = Log::FormatException(error);
+	//! do not UI on loading
+	//! cannot UI on unloading
 
-	// add macro info
-	if (msgMacro)
-		info += Environment::NewLine + msgMacro + Environment::NewLine;
+	//! trace full, so users can report
+	auto errorString = error->ToString();
+	Log::TraceError(errorString);
 
-	// add verbose information
-	info += Environment::NewLine + error->ToString();
+	auto text = gcnew StringWriter;
+	Log::FormatException(text, error);
+	text->WriteLine(title);
 
-	// locked editor
-	EditTextArgs args;
-	args.Text = info;
-	args.Title = error->GetType()->FullName;
-	args.IsLocked = true;
-	Works::EditorTools::EditText(%args);
+	// on loading print errors
+	if (g_AppState == AppState::Loading)
+	{
+		Far::Api->UI->Write(text->ToString(), ConsoleColor::Red);
+	}
+	else
+	{
+		text->Write(errorString);
+		Far::Api->Message(text->ToString(), title, (MessageOptions::Gui | MessageOptions::Warning));
+	}
 }
 
 IDialog^ Far1::CreateDialog(int left, int top, int right, int bottom)
 {
 	return gcnew FarDialog(left, top, right, bottom);
-}
-
-Works::IPanelWorks^ Far1::WorksPanel(FarNet::Panel^ panel, Explorer^ explorer)
-{
-	return gcnew FarNet::Panel2(panel, explorer);
 }
 
 array<Panel^>^ Far1::Panels(Guid typeId)
@@ -344,9 +315,9 @@ String^ Far1::Input(String^ prompt, String^ history, String^ title, String^ text
 	return ib.Show() ? ib.Text : nullptr;
 }
 
-void Far1::PostSteps(IEnumerable<Object^>^ steps)
+void Far1::PostStep(Action^ step)
 {
-	Far0::PostSteps(steps);
+	Far0::PostStep(step);
 }
 
 String^ Far1::TempName(String^ prefix)
@@ -355,16 +326,8 @@ String^ Far1::TempName(String^ prefix)
 
 	CBox box;
 	while(box(Info.FSF->MkTemp(box, box.Size(), pin))) {}
-	
-	return gcnew String(box);
-}
 
-String^ Far1::TempFolder(String^ prefix)
-{
-	String^ dir = TempName(prefix);
-	if (!Directory::Exists(dir))
-		Directory::CreateDirectory(dir);
-	return dir;
+	return gcnew String(box);
 }
 
 IDialog^ Far1::Dialog::get()
@@ -403,9 +366,10 @@ void Far1::PostMacro(String^ macro, bool enableOutput, bool disablePlugins)
 	if (Info.MacroControl(&MainGuid, MCTL_SENDSTRING, MSSC_POST, &arg))
 		return;
 
-	intptr_t size = Info.MacroControl(&MainGuid, MCTL_GETLASTERROR, 0, 0);
-	MacroParseResult* arg2 = (MacroParseResult*)new char[size];
-	arg2->StructSize = sizeof(*arg2);
+	auto size = Info.MacroControl(&MainGuid, MCTL_GETLASTERROR, 0, 0);
+	auto data = std::make_unique<char[]>(size);
+	auto arg2 = (MacroParseResult*)data.get();
+	arg2->StructSize = sizeof(MacroParseResult);
 	Info.MacroControl(&MainGuid, MCTL_GETLASTERROR, size, arg2);
 	String^ err = String::Format(
 		"Error message: {0}\n"
@@ -415,7 +379,6 @@ void Far1::PostMacro(String^ macro, bool enableOutput, bool disablePlugins)
 		arg2->ErrPos.Y,
 		arg2->ErrPos.X,
 		macro);
-	delete arg2;
 	throw gcnew ArgumentException(err, "macro");
 }
 
@@ -423,7 +386,7 @@ void Far1::Quit()
 {
 	if (!Works::ModuleLoader::CanExit())
 		return;
-	
+
 	Info.AdvControl(&MainGuid, ACTL_QUIT, 0, 0);
 }
 
@@ -444,14 +407,14 @@ IUserInterface^ Far1::UI::get()
 	return %FarUI::Instance;
 }
 
-bool Far1::IsMaskMatch(String^ path, String^ mask)
+bool Far1::IsMaskMatch(String^ path, String^ mask, bool full)
 {
 	if (!path) throw gcnew ArgumentNullException("path");
 	if (!mask) throw gcnew ArgumentNullException("mask");
-	
+
 	// match
 	PIN_NE(pin, path);
-	return Far0::MatchMask(mask, pin, true);
+	return Far0::MatchMask(mask, pin, !full);
 }
 
 bool Far1::IsMaskValid(String^ mask)
@@ -465,11 +428,14 @@ bool Far1::IsMaskValid(String^ mask)
 
 String^ Far1::GetFolderPath(SpecialFolder folder)
 {
-	switch(folder)
+	switch (folder)
 	{
-	case SpecialFolder::LocalData: return _LocalData;
-	case SpecialFolder::RoamingData: return _RoamingData;
-	default: throw gcnew ArgumentException("folder");
+	case SpecialFolder::LocalData:
+		return Environment::GetEnvironmentVariable("FARLOCALPROFILE");
+	case SpecialFolder::RoamingData:
+		return Environment::GetEnvironmentVariable("FARPROFILE");
+	default:
+		throw gcnew ArgumentException("folder");
 	}
 }
 
@@ -486,21 +452,6 @@ void Far1::ShowHelp(String^ path, String^ topic, HelpOptions options)
 	Info.ShowHelp(pinPath, pinTopic, (int)options);
 }
 
-void Far1::ShowHelpTopic(String^ topic)
-{
-	String^ path = Path::GetDirectoryName(Assembly::GetCallingAssembly()->Location);
-
-	PIN_NE(pinPath, path);
-	PIN_NS(pinTopic, topic);
-
-	Info.ShowHelp(pinPath, pinTopic, FHELP_CUSTOMPATH);
-}
-
-String^ Far1::GetHelpTopic(String^ topic)
-{
-	return "<" + Path::GetDirectoryName(Assembly::GetCallingAssembly()->Location) + "\\>" + topic;
-}
-
 IHistory^ Far1::History::get()
 {
 	return %FarNet::History::Instance;
@@ -510,10 +461,10 @@ Object^ Far1::GetSetting(FarSetting settingSet, String^ settingName)
 {
 	Settings settings(FarGuid);
 
-	FarSettingsItem arg = {sizeof(arg)};
+	FarSettingsItem arg;
 	if (!settings.Get((int)settingSet, settingName, arg))
 		throw gcnew ArgumentException(String::Format("Cannot get setting: set = '{0}' name = '{1}'", settingSet, settingName));
-	
+
 	switch(arg.Type)
 	{
 	case FST_QWORD:

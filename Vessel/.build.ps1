@@ -1,114 +1,115 @@
-
 <#
 .Synopsis
-	Build script (https://github.com/nightroman/Invoke-Build)
+	Build script, https://github.com/nightroman/Invoke-Build
 #>
 
 param(
-	$FarHome = (property FarHome C:\Bin\Far\x64),
-	$TargetFrameworkVersion = (property TargetFrameworkVersion v3.5)
+	$Configuration = (property Configuration Release),
+	$FarHome = (property FarHome C:\Bin\Far\x64)
 )
 
-$ModuleHome = "$FarHome\FarNet\Modules\Vessel"
+Set-StrictMode -Version 3
+$ModuleName = 'Vessel'
+$ModuleRoot = "$FarHome\FarNet\Modules\$ModuleName"
+$Description = 'Enhanced history of files, folders, commands. FarNet module for Far Manager.'
 
-# Synopsis: Build all. Exit Far Manager!
-task . Build, Help, Clean
-
-# Get version from release notes.
-function Get-Version {
-	switch -Regex -File History.txt {'=\s+(\d+\.\d+\.\d+)\s+=' {return $Matches[1]} }
+task build meta, {
+	exec { dotnet build -c $Configuration /p:FarHome=$FarHome }
 }
 
-# Synopsis: Generate or update meta files.
-task Meta -Inputs History.txt, .build.ps1 -Outputs AssemblyInfo.cs {
-	$Version = Get-Version
+task publish {
+	$null = mkdir $ModuleRoot -Force
+	Copy-Item -Destination $ModuleRoot @(
+		"bin\$Configuration\net8.0\$ModuleName.dll"
+		"bin\$Configuration\net8.0\$ModuleName.pdb"
+	)
+}
 
-	Set-Content AssemblyInfo.cs @"
-using System;
-using System.Reflection;
-using System.Runtime.InteropServices;
+task clean {
+	remove z, bin, obj, README.htm, FarNet.$ModuleName.*.nupkg
+}
 
-[assembly: AssemblyVersion("$Version")]
-[assembly: AssemblyProduct("FarNet.Vessel")]
-[assembly: AssemblyTitle("FarNet module Vessel for Far Manager")]
-[assembly: AssemblyDescription("FarNet.Vessel: (View/Edit/Save/SELect) file history tools")]
-[assembly: AssemblyCompany("https://github.com/nightroman/FarNet")]
-[assembly: AssemblyCopyright("Copyright (c) 2011-2017 Roman Kuzmin")]
+task version {
+	($script:Version = switch -regex -file History.txt {'^= (\d+\.\d+\.\d+) =$' {$matches[1]; break}})
+	assert $script:Version
+}
 
-[assembly: ComVisible(false)]
-[assembly: CLSCompliant(true)]
+task meta -Inputs .build.ps1, History.txt -Outputs Directory.Build.props version, {
+	Set-Content Directory.Build.props @"
+<Project>
+  <PropertyGroup>
+    <Company>https://github.com/nightroman/FarNet</Company>
+    <Copyright>Copyright (c) Roman Kuzmin</Copyright>
+    <Product>FarNet.$ModuleName</Product>
+    <Version>$Version</Version>
+    <Description>$Description</Description>
+  </PropertyGroup>
+</Project>
 "@
 }
 
-# Build and install the assembly.
-task Build Meta, {
-	use 14.0 MSBuild
-	exec { MSBuild Vessel.csproj /p:Configuration=Release /p:FarHome=$FarHome /p:TargetFrameworkVersion=$TargetFrameworkVersion }
+task markdown {
+	# HLF
+	exec { pandoc.exe README.md --output=README.htm --from=gfm }
+	exec { HtmlToFarHelp "from=README.htm" "to=$ModuleRoot\Vessel.hlf" }
+
+	# HTM
+	assert (Test-Path $env:MarkdownCss)
+	exec {
+		pandoc.exe @(
+			'README.md'
+			'--output=README.htm'
+			'--from=gfm'
+			'--embed-resources'
+			'--standalone'
+			"--css=$env:MarkdownCss"
+			"--metadata=pagetitle:$ModuleName"
+		)
+	}
 }
 
-# In addition to Build: new About-Vessel.htm, $ModuleHome\Vessel.hlf
-task Help {
-	exec { MarkdownToHtml "From=About-Vessel.text" "To=About-Vessel.htm" }
-	exec { HtmlToFarHelp "From=About-Vessel.htm" "To=$ModuleHome\Vessel.hlf" }
-}
-
-task Clean {
-	remove z, bin, obj, About-Vessel.htm, FarNet.Vessel.*.nupkg
-}
-
-task Version {
-	($script:Version = Get-Version)
-}
-
-task Package Help, {
-	$toModule = 'z\tools\FarHome\FarNet\Modules\Vessel'
-
+task package markdown, {
 	remove z
-	$null = mkdir $toModule
+	$toModule = mkdir "z\tools\FarHome\FarNet\Modules\$ModuleName"
 
-	Copy-Item -Destination $toModule `
-	About-Vessel.htm,
-	History.txt,
-	LICENSE.txt,
-	Vessel.macro.lua,
-	$ModuleHome\Vessel.dll,
-	$ModuleHome\Vessel.hlf
+	# main
+	Copy-Item -Destination $toModule @(
+		'README.htm'
+		'History.txt'
+		'..\LICENSE'
+		'Vessel.macro.lua'
+		"$ModuleRoot\Vessel.dll"
+		"$ModuleRoot\Vessel.hlf"
+	)
+
+	# meta
+	Copy-Item -Destination z @(
+		'README.md'
+		'..\Zoo\FarNetLogo.png'
+	)
 }
 
-task NuGet Package, Version, {
-	$text = @'
-Vessel (View/Edit/Save/SELect) is the FarNet module for Far Manager. It records
-the history of file view, edit, and save operations, directory select history,
-and provides related tools.
-
----
-
-To install FarNet packages, follow these steps:
-
-https://raw.githubusercontent.com/nightroman/FarNet/master/Install-FarNet.en.txt
-
----
-'@
-	# nuspec
+task nuget package, version, {
 	Set-Content z\Package.nuspec @"
 <?xml version="1.0"?>
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
 	<metadata>
-		<id>FarNet.Vessel</id>
+		<id>FarNet.$ModuleName</id>
 		<version>$Version</version>
 		<owners>Roman Kuzmin</owners>
 		<authors>Roman Kuzmin</authors>
 		<projectUrl>https://github.com/nightroman/FarNet</projectUrl>
-		<iconUrl>https://raw.githubusercontent.com/wiki/nightroman/FarNet/images/FarNetLogo.png</iconUrl>
-		<licenseUrl>https://raw.githubusercontent.com/nightroman/FarNet/master/Vessel/LICENSE.txt</licenseUrl>
-		<requireLicenseAcceptance>false</requireLicenseAcceptance>
-		<summary>$text</summary>
-		<description>$text</description>
-		<releaseNotes>https://raw.githubusercontent.com/nightroman/FarNet/master/Vessel/History.txt</releaseNotes>
+		<icon>FarNetLogo.png</icon>
+		<readme>README.md</readme>
+		<license type="expression">BSD-3-Clause</license>
+		<description>$Description</description>
+		<releaseNotes>https://github.com/nightroman/FarNet/blob/main/$ModuleName/History.txt</releaseNotes>
 		<tags>FarManager FarNet Module</tags>
 	</metadata>
 </package>
 "@
-	# pack
-	exec { NuGet pack z\Package.nuspec -NoPackageAnalysis }
+
+	exec { NuGet.exe pack z\Package.nuspec }
 }
+
+task . build, markdown, clean

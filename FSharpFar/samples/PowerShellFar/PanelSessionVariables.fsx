@@ -10,15 +10,11 @@ open FarNet
 open FarNet.FSharp
 
 //
-// Create some variables with known F#, PowerShellFar, FarNet objects.
+// Create variables with some known objects assigned.
 //
 
-// The fsi object, F# compiler settings
-#r @"FarNet\Modules\FSharpFar\FSharp.Compiler.Service.dll"
-let fsi = FSharp.Compiler.Interactive.Shell.Settings.fsi
-
 // The psf object, PowerShellFar
-let psf = (PowerShellFar.invokeScript "$Psf" null).[0]
+let psf = (PSFar.Invoke "$Psf")[0]
 
 // The far object, FarNet
 let far = far
@@ -28,4 +24,4 @@ let far = far
 //
 
 #load @"..\Lib\SessionVariables.fs"
-PowerShellFar.invokeScript "$args[0] | Out-FarPanel" [| SessionVariables.getVariables () |]
+PSFar.Invoke("$args[0] | Out-FarPanel", [| SessionVariables.getVariables () |])

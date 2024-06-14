@@ -1,12 +1,11 @@
-
 <#PSScriptInfo
-.VERSION 1.0.3
+.VERSION 1.0.8
 .AUTHOR Roman Kuzmin
 .COPYRIGHT (c) Roman Kuzmin
 .GUID 550bc198-dd44-4bbc-8ad7-ccf4b8bd2aff
 .TAGS TabExpansion2, Register-ArgumentCompleter
 .LICENSEURI http://www.apache.org/licenses/LICENSE-2.0
-.PROJECTURI https://github.com/nightroman/FarNet/blob/master/PowerShellFar/TabExpansion2.ps1
+.PROJECTURI https://github.com/nightroman/FarNet/blob/main/PowerShellFar/TabExpansion2.ps1
 #>
 
 <#
@@ -160,6 +159,9 @@ function global:TabExpansion2 {
 		[Parameter(ParameterSetName = 'AstInputSet', Position = 3)]
 		[Hashtable]$options
 	)
+
+	${private:%} = $null
+
 	${private:*} = @{
 		inputScript = $inputScript
 		cursorColumn = $cursorColumn
@@ -175,9 +177,9 @@ function global:TabExpansion2 {
 		${*}.options = $PSCmdlet.GetVariableValue('TabExpansionOptions')
 		if ($PSCmdlet.GetVariableValue('TabExpansionProfile')) {
 			Remove-Variable -Name TabExpansionProfile -Scope Global
-			foreach($_ in Get-Command -Name *ArgumentCompleters.ps1 -CommandType ExternalScript -All) {
-				if (& $_.Definition) {
-					Write-Error -ErrorAction 0 "TabExpansion2: Unexpected output. Profile: $($_.Definition)"
+			foreach(${%} in Get-Command -Name *ArgumentCompleters.ps1 -CommandType ExternalScript -All) {
+				if (& ${%}.Definition) {
+					Write-Error -ErrorAction 0 "TabExpansion2: Unexpected output. Profile: $(${%}.Definition)"
 				}
 			}
 		}
@@ -185,19 +187,19 @@ function global:TabExpansion2 {
 
 	# parse input
 	if ($PSCmdlet.ParameterSetName -eq 'ScriptInputSet') {
-		$_ = [System.Management.Automation.CommandCompletion]::MapStringInputToParsedInput(${*}.inputScript, ${*}.cursorColumn)
-		${*}.ast = $_.Item1
-		${*}.tokens = $_.Item2
-		${*}.positionOfCursor = $_.Item3
+		${%} = [System.Management.Automation.CommandCompletion]::MapStringInputToParsedInput(${*}.inputScript, ${*}.cursorColumn)
+		${*}.ast = ${%}.Item1
+		${*}.tokens = ${%}.Item2
+		${*}.positionOfCursor = ${%}.Item3
 	}
 
 	# input processors
-	foreach($_ in ${*}.options['InputProcessors']) {
-		if (${*}.result = & $_ ${*}.ast ${*}.tokens ${*}.positionOfCursor ${*}.options) {
+	foreach(${%} in ${*}.options['InputProcessors']) {
+		if (${*}.result = & ${%} ${*}.ast ${*}.tokens ${*}.positionOfCursor ${*}.options) {
 			if (${*}.result -is [System.Management.Automation.CommandCompletion]) {
 				return ${*}.result
 			}
-			Write-Error -ErrorAction 0 "TabExpansion2: Invalid result. Input processor: $_"
+			Write-Error -ErrorAction 0 "TabExpansion2: Invalid result. Input processor: ${%}"
 		}
 	}
 
@@ -205,25 +207,26 @@ function global:TabExpansion2 {
 	${*}.result = [System.Management.Automation.CommandCompletion]::CompleteInput(${*}.ast, ${*}.tokens, ${*}.positionOfCursor, ${*}.options)
 
 	# result processors?
-	if (!(${*}.processors = ${*}.options['ResultProcessors'])) {
-		return ${*}.result
+	if ((${*}.processors = ${*}.options['ResultProcessors'])) {
+		# work around read only
+		if (${*}.result.CompletionMatches.IsReadOnly) {
+			if (${*}.result.CompletionMatches) {
+				return ${*}.result
+			}
+			${*}.result.CompletionMatches = New-Object System.Collections.ObjectModel.Collection[System.Management.Automation.CompletionResult]
+		}
+
+		# invoke processors
+		foreach($_ in ${*}.processors) {
+			if (& $_ ${*}.result ${*}.ast ${*}.tokens ${*}.positionOfCursor ${*}.options) {
+				Write-Error -ErrorAction 0 "TabExpansion2: Unexpected output. Result processor: $_"
+			}
+		}
 	}
 
-	# work around read only
-	if (${*}.result.CompletionMatches.IsReadOnly) {
-		if (${*}.result.CompletionMatches) {
-			return ${*}.result
-		}
-		function TabExpansion {'*'}
-		${*}.result = [System.Management.Automation.CommandCompletion]::CompleteInput("$(${*}.ast)", ${*}.positionOfCursor.Offset, $null)
-		${*}.result.CompletionMatches.Clear()
-	}
-
-	# result processors
-	foreach($_ in ${*}.processors) {
-		if (& $_ ${*}.result ${*}.ast ${*}.tokens ${*}.positionOfCursor ${*}.options) {
-			Write-Error -ErrorAction 0 "TabExpansion2: Unexpected output. Result processor: $_"
-		}
+	# nothing and cursor char is not space? try insert space
+	if (!${*}.result.CompletionMatches -and ($_ = ${*}.inputScript) -and ${*}.cursorColumn -lt $_.Length -and $_[${*}.cursorColumn] -match '\S') {
+		return TabExpansion2 ($_.Insert(${*}.cursorColumn, ' ')) ${*}.cursorColumn
 	}
 
 	${*}.result

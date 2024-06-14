@@ -1,86 +1,79 @@
-
 <#
 .Synopsis
-	Build script (https://github.com/nightroman/Invoke-Build)
+	Build script, https://github.com/nightroman/Invoke-Build
 #>
 
 param(
 	$Platform = (property Platform x64),
 	$Configuration = (property Configuration Release),
-	$TargetFrameworkVersion = (property TargetFrameworkVersion v3.5)
+	$TargetFramework = (property TargetFramework net8.0)
 )
 $FarHome = "C:\Bin\Far\$Platform"
 
 $script:Builds = @(
 	'FarNet\.build.ps1'
-	'FarNet.Settings\.build.ps1'
-	'FarNet.Tools\.build.ps1'
-	'FarNet.Works.Config\.build.ps1'
-	'FarNet.Works.Dialog\.build.ps1'
-	'FarNet.Works.Editor\.build.ps1'
-	'FarNet.Works.Manager\.build.ps1'
-	'FarNet.Works.Panels\.build.ps1'
 	'FarNetMan\.build.ps1'
 )
 
-function Clean {
-	foreach($_ in $Builds) { Invoke-Build Clean $_ }
+function do-clean {
+	foreach($_ in $Builds) { Invoke-Build clean $_ }
 	remove z, FarNet.sdf, About-FarNet.htm
 }
 
-task Clean {
-	Clean
+task clean {
+	do-clean
 }
 
-task Install {
-	foreach($_ in $Builds) { Invoke-Build Install $_ }
-	Copy-Item Far.exe.config $FarHome
-	# It may fail in Debug...
-	if ($Configuration -eq 'Release') {
-		Copy-Item FarNet.Settings\bin\Release\FarNet.Settings.xml, FarNet.Tools\bin\Release\FarNet.Tools.xml $FarHome\FarNet
+task install {
+	foreach($_ in $Builds) {
+		Invoke-Build install $_
 	}
 },
-Help
+helpHLF
 
-task Uninstall {
-	foreach($_ in $Builds) { Invoke-Build Uninstall $_ }
-	remove $FarHome\Far.exe.config
+task uninstall {
+	foreach($_ in $Builds) { Invoke-Build uninstall $_ }
 }
 
-task Help -If ($Configuration -eq 'Release') {
-	exec { MarkdownToHtml "From=About-FarNet.text" "To=About-FarNet.htm" }
-	exec { HtmlToFarHelp "From=About-FarNet.htm" "To=$FarHome\Plugins\FarNet\FarNetMan.hlf" }
+# Make HLF, called by Build (Install), depends on x64/x86
+task helpHLF -If ($Configuration -eq 'Release') {
+	exec { pandoc.exe README.md --output=z.htm --from=gfm }
+	exec { HtmlToFarHelp from=z.htm to=$FarHome\Plugins\FarNet\FarNetMan.hlf }
+	remove z.htm
 }
 
-# Tests before packaging
-task BeginPackage {
-	# Far.exe.config
-	$xml = [xml](Get-Content $FarHome\Far.exe.config)
-	$nodes = @($xml.SelectNodes('configuration/appSettings/add'))
-	assert ($nodes.Count -eq 0)
-	$nodes = @($xml.SelectNodes('configuration/system.diagnostics/switches/add'))
-	assert ($nodes.Count -eq 1)
-	assert ($nodes[0].name -ceq 'FarNet.Trace')
-	assert ($nodes[0].value -ceq 'Warning')
+# Make markdown
+task markdown {
+	assert (Test-Path $env:MarkdownCss)
+	exec {
+		pandoc.exe @(
+			'README.md'
+			'--output=About-FarNet.htm'
+			'--from=gfm'
+			'--embed-resources'
+			'--standalone'
+			"--css=$env:MarkdownCss"
+			'--metadata=pagetitle:FarNet'
+		)
+	}
+}
+
+# Test config and make another platform before packaging
+task beginPackage {
+	# make another platform
+	$bit = if ($Platform -eq 'Win32') {'x64'} else {'Win32'}
+
+	#! build just FarNetMan, PowerShellFar is not needed and causes locked files...
+	exec { & (Resolve-MSBuild) @(
+		"..\FarNet.sln"
+		"/t:restore,FarNetMan"
+		"/p:Platform=$bit"
+		"/p:Configuration=Release"
+	)}
 }
 
 # Make package files
-task Package BeginPackage, Help, {
-	Set-Alias MSBuild (Resolve-MSBuild)
-	# build another platform
-	$bit = if ($Platform -eq 'Win32') {'x64'} else {'Win32'}
-	$PlatformToolset = if ($TargetFrameworkVersion -lt 'v4') {'v90'} else {'v140'}
-	exec {
-		MSBuild @(
-			"..\FarNetAccord.sln"
-			"/t:FarNetMan"
-			"/p:Platform=$bit"
-			"/p:Configuration=Release"
-			"/p:TargetFrameworkVersion=$TargetFrameworkVersion"
-			"/p:PlatformToolset=$PlatformToolset"
-		)
-	}
-
+task package beginPackage, markdown, {
 	# folders
 	remove z
 	$null = mkdir `
@@ -91,75 +84,71 @@ task Package BeginPackage, Help, {
 
 	# copy
 	[System.IO.File]::Delete("$FarHome\FarNet\FarNetAPI.chw")
-	Copy-Item -Destination z\tools\FarHome $FarHome\Far.exe.config
 	Copy-Item -Destination z\tools\FarHome\FarNet $(
 		'About-FarNet.htm'
 		'History.txt'
-		'LICENSE.txt'
+		'..\LICENSE'
 		"$FarHome\FarNet\FarNet.dll"
 		"$FarHome\FarNet\FarNet.xml"
-		"$FarHome\FarNet\FarNet.Settings.dll"
-		"$FarHome\FarNet\FarNet.Settings.xml"
-		"$FarHome\FarNet\FarNet.Tools.dll"
-		"$FarHome\FarNet\FarNet.Tools.xml"
-		"$FarHome\FarNet\FarNet.Works.Config.dll"
-		"$FarHome\FarNet\FarNet.Works.Dialog.dll"
-		"$FarHome\FarNet\FarNet.Works.Editor.dll"
-		"$FarHome\FarNet\FarNet.Works.Manager.dll"
-		"$FarHome\FarNet\FarNet.Works.Panels.dll"
 		"$FarHome\FarNet\FarNetAPI.chm"
 	)
-	Copy-Item -Destination z\tools\FarHome\Plugins\FarNet $FarHome\Plugins\FarNet\FarNetMan.hlf
+	Copy-Item -Destination z\tools\FarHome\Plugins\FarNet @(
+		"$FarHome\Plugins\FarNet\FarNetMan.hlf"
+		"$FarHome\Plugins\FarNet\FarNetMan.runtimeconfig.json"
+	)
 	if ($Platform -eq 'Win32') {
-		Copy-Item -Destination z\tools\FarHome.x64\Plugins\FarNet FarNetMan\Release\x64\FarNetMan.dll
-		Copy-Item -Destination z\tools\FarHome.x86\Plugins\FarNet $FarHome\Plugins\FarNet\FarNetMan.dll
+		Copy-Item -Destination z\tools\FarHome.x64\Plugins\FarNet @(
+			"FarNetMan\Release\x64\FarNetMan.dll"
+			"FarNetMan\Release\x64\Ijwhost.dll"
+		)
+		Copy-Item -Destination z\tools\FarHome.x86\Plugins\FarNet @(
+			"$FarHome\Plugins\FarNet\FarNetMan.dll"
+			"$FarHome\Plugins\FarNet\Ijwhost.dll"
+		)
 	}
 	else {
-		Copy-Item -Destination z\tools\FarHome.x64\Plugins\FarNet $FarHome\Plugins\FarNet\FarNetMan.dll
-		Copy-Item -Destination z\tools\FarHome.x86\Plugins\FarNet FarNetMan\Release\Win32\FarNetMan.dll
+		Copy-Item -Destination z\tools\FarHome.x64\Plugins\FarNet @(
+			"$FarHome\Plugins\FarNet\FarNetMan.dll"
+			"$FarHome\Plugins\FarNet\Ijwhost.dll"
+		)
+		Copy-Item -Destination z\tools\FarHome.x86\Plugins\FarNet @(
+			"FarNetMan\Release\Win32\FarNetMan.dll"
+			"FarNetMan\Release\Win32\Ijwhost.dll"
+		)
 	}
+
+	# icon
+	Copy-Item ..\Zoo\FarNetLogo.png z
 }
 
 # Set version
-task Version {
+task version {
 	. ..\Get-Version.ps1
 	($script:Version = $FarNetVersion)
 }
 
 # Make NuGet package
-task NuGet Package, Version, {
-	$text = @'
-FarNet provides the .NET API for Far Manager and the runtime infrastructure for
-.NET modules. The package includes the framework and the module manager plugin.
+task nuget package, version, {
+	Get-Content ..\README.md | ?{$_ -notlike '*FarNetLogo.png*'} | Set-Content z\README.md
 
----
-
-To install FarNet packages, follow these steps:
-
-https://raw.githubusercontent.com/nightroman/FarNet/master/Install-FarNet.en.txt
-
----
-'@
-	# nuspec
 	Set-Content z\Package.nuspec @"
 <?xml version="1.0"?>
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
 	<metadata>
+		<description>.NET API for Far Manager and runtime for .NET modules and scripts.</description>
 		<id>FarNet</id>
 		<version>$Version</version>
 		<authors>Roman Kuzmin</authors>
 		<owners>Roman Kuzmin</owners>
 		<projectUrl>https://github.com/nightroman/FarNet</projectUrl>
-		<iconUrl>https://raw.githubusercontent.com/wiki/nightroman/FarNet/images/FarNetLogo.png</iconUrl>
+		<icon>FarNetLogo.png</icon>
 		<license type="expression">BSD-3-Clause</license>
-		<requireLicenseAcceptance>false</requireLicenseAcceptance>
-		<summary>$text</summary>
-		<description>$text</description>
-		<releaseNotes>https://raw.githubusercontent.com/nightroman/FarNet/master/FarNet/History.txt</releaseNotes>
+		<releaseNotes>https://github.com/nightroman/FarNet/blob/main/FarNet/History.txt</releaseNotes>
 		<tags>FarManager FarNet PowerShell Module Plugin</tags>
+		<readme>README.md</readme>
 	</metadata>
 </package>
 "@
-	# pack
-	exec { NuGet pack z\Package.nuspec -NoPackageAnalysis }
+
+	exec { NuGet.exe pack z\Package.nuspec }
 }

@@ -1,5 +1,44 @@
+https://www.nuget.org/packages/FarNet.FolderChart
 
-NuGet package: https://www.nuget.org/packages/FarNet.FolderChart
+= 5.0.1 =
+
+Update packages
+
+= 5.0.0 =
+
+Requires FarNet 8
+
+= 4.0.1 =
+
+master -> main, update links.
+
+= 4.0.0 =
+
+Requires FarNet 7, uses .NET 7.
+
+= 3.0.1 =
+
+Requires FarNet 6.0.7
+- Use new module ids.
+- Build as ALC module.
+- Use net6 LinkTarget.
+
+= 3.0.0 =
+
+Requires FarNet 6, uses .NET 6.
+
+= 2.4.2 =
+
+Requires FarNet 5.9.4.
+Uses net472.
+
+= 2.4.1 =
+
+Minor tweaks.
+
+= 2.4.0 =
+
+Requires .NET Framework 4.5
 
 = 2.3.1 =
 

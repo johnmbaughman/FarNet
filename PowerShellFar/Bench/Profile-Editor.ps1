@@ -1,52 +1,56 @@
-
 <#
 .Synopsis
 	Editor profile (example).
 	Author: Roman Kuzmin
 
 .Description
-	The profile should be in %FARPROFILE%\FarNet\PowerShellFar
-
-	This is an example of the editor profile which is invoked when an editor is
-	opened the first time. It installs some key and mouse handles. Before using
-	read the help "Profile-Editor.ps1" and the code.
+	The editor profile: %FARPROFILE%\FarNet\PowerShellFar\Profile-Editor.ps1
+	Before using read the code and see "Profile-Editor.ps1" in documentation.
 #>
 
-### Editor data. This line also denies the second call, it fails.
+### Init focus data, set ReadOnly to prevent next calls.
 New-Variable Editor.Data @{} -Scope Global -Option ReadOnly -Description 'Editor handlers data.' -ErrorAction Stop
 
-### GotFocus handler; it resets old data
-$Far.AnyEditor.add_GotFocus({&{
+### GotFocus: reset focus data
+$Far.AnyEditor.add_GotFocus({
 	${Editor.Data}.Clear()
-}})
+})
 
-### Key down handler
-$Far.AnyEditor.add_KeyDown({&{
-	### F1
-	if ($_.Key.Is([FarNet.KeyCode]::F1)) {
-		if ($this.FileName -like '*.hlf') {
-			$_.Ignore = $true
-			Show-Hlf-.ps1
-		}
-		elseif ($this.FileName -match '\.(?:text|md|markdown)$') {
-			$_.Ignore = $true
-			Show-Markdown-.ps1 -Help
-		}
+### Customise some file types
+$Far.AnyEditor.add_Opened({
+	$ext = [System.IO.Path]::GetExtension($this.FileName)
+	### Markdown: [F1] ~ preview help
+	if ($ext -eq '.md' -or $ext -eq '.text') {
+		$this.add_KeyDown({
+			if ($_.Key.Is([FarNet.KeyCode]::F1)) {
+				$_.Ignore = $true
+				Show-Markdown.ps1 -Help
+			}
+		})
 	}
-}})
+	### HLF: [F1] ~ preview help
+	elseif ($ext -eq '.hlf') {
+		$this.add_KeyDown({
+			if ($_.Key.Is([FarNet.KeyCode]::F1)) {
+				$_.Ignore = $true
+				Show-Hlf.ps1
+			}
+		})
+	}
+})
 
 ### Mouse click handler
-$Far.AnyEditor.add_MouseClick({&{
+$Far.AnyEditor.add_MouseClick({
 	$m = $_.Mouse
 	### Left click
 	if ($m.Buttons -eq 'Left') {
 		if ($m.Is()) {
+			# just click, keep the position
 			${Editor.Data}.LCPos = $this.ConvertPointScreenToEditor($m.Where)
-			${Editor.Data}.LMFoo = 1
 		}
 		elseif ($m.IsShift()) {
+			# Shift click, select text from the last to current position
 			$_.Ignore = $true
-			${Editor.Data}.LMFoo = 1
 			$p1 = ${Editor.Data}.LCPos
 			if (!$p1) {
 				$p1 = $this.Caret
@@ -59,30 +63,29 @@ $Far.AnyEditor.add_MouseClick({&{
 	### Right click
 	elseif ($m.Buttons -eq 'Right') {
 		if ($m.Is()) {
+			# just click, show the menu
 			$_.Ignore = $true
 			$Editor = $this
 			$SelectionExists = $this.SelectionExists
-			New-FarMenu -Show -AutoAssignHotkeys -X $m.Where.X -Y $m.Where.Y -Items @(
+			New-FarMenu -Show -AutoAssignHotkeys -NoMargin -X $m.Where.X -Y $m.Where.Y -Items @(
 				New-FarItem 'Cut' { $Far.CopyToClipboard($Editor.GetSelectedText()); $Editor.DeleteText() } -Disabled:(!$SelectionExists)
 				New-FarItem 'Copy' { $Far.CopyToClipboard($Editor.GetSelectedText()) } -Disabled:(!$SelectionExists)
 				New-FarItem 'Paste' { if ($SelectionExists) { $Editor.DeleteText() } $Editor.InsertText($Far.PasteFromClipboard()) }
+				New-FarItem 'Copy base' { $Far.CopyToClipboard([IO.Path]::GetFileNameWithoutExtension($Editor.FileName)) }
+				New-FarItem 'Copy name' { $Far.CopyToClipboard([IO.Path]::GetFileName($Editor.FileName)) }
+				New-FarItem 'Copy path' { $Far.CopyToClipboard($Editor.FileName) }
 			)
 		}
 	}
-}})
+})
 
 ### Mouse move handler
-$Far.AnyEditor.add_MouseMove({&{
+$Far.AnyEditor.add_MouseMove({
 	$m = $_.Mouse
-	### Left moved
+	### Left move
 	if ($m.Buttons -eq 'Left') {
-		# [_090406_225257] skip the 1st move after some mouse actions
-		#  ??? workaround, to remove when fixed in Far or FarNet
-		if (${Editor.Data}.LMFoo) {
-			$_.Ignore = $true
-			${Editor.Data}.LMFoo = 0
-		}
-		elseif ($m.Is()) {
+		if ($m.Is()) {
+			# drag, select text from the last to current position
 			$p1 = ${Editor.Data}.LCPos
 			if ($p1) {
 				$_.Ignore = $true
@@ -92,4 +95,4 @@ $Far.AnyEditor.add_MouseMove({&{
 			}
 		}
 	}
-}})
+})

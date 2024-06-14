@@ -1,45 +1,36 @@
 ﻿
-// Copyright 2012-2016 Roman Kuzmin
+// Copyright (c) Roman Kuzmin
 // http://www.apache.org/licenses/LICENSE-2.0
 
 using System;
 using System.Collections;
 using System.Data.Common;
 using System.IO;
-using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Xml;
-
-[assembly: AssemblyVersion("1.0.4")]
-[assembly: AssemblyProduct("HtmlToFarHelp")]
-[assembly: AssemblyTitle("HtmlToFarHelp")]
-[assembly: AssemblyDescription("HtmlToFarHelp - converts HTML to Far Manager help")]
-[assembly: AssemblyCompany("https://github.com/nightroman/FarNet")]
-[assembly: AssemblyCopyright("Copyright (c) 2012-2016 Roman Kuzmin")]
-[assembly: ComVisible(false)]
-[assembly: CLSCompliant(true)]
 
 namespace HtmlToFarHelp
 {
 	class Program
 	{
-		const string Usage = @"Error: {0}
-{1}
+		const string Usage = @"
+Input: {0}
+Error: {1}
 
 Usage:
-  HtmlToFarHelp.exe key=value ...
-  HtmlToFarHelp.exe ""key = value; ...""
+    HtmlToFarHelp key=value ...
+    HtmlToFarHelp ""key = value; ...""
 
-Keys:
-  From = Input HTML file
-  To   = Output HLF file
+Input:
+    from = input HTML file
+    to = output HLF file
 ";
 		static int Main(string[] args)
 		{
 			var parameters = string.Join("; ", args);
 			string from = null;
 			string to = null;
+			bool verbose = false;
 			try
 			{
 				var builder = new DbConnectionStringBuilder() { ConnectionString = parameters };
@@ -49,40 +40,43 @@ Keys:
 					{
 						case "from": from = it.Value.ToString(); break;
 						case "to": to = it.Value.ToString(); break;
-						default: throw new ArgumentException("Unknown key: " + it.Key);
+						case "verbose": verbose = bool.Parse(it.Value.ToString()); break;
+						default: throw new Exception($"Unknown key: '{it.Key}'.");
 					}
 				}
 
-				if (from == null) throw new ArgumentException("Missing key 'From'.");
-				if (to == null) throw new ArgumentException("Missing key 'To'.");
+				if (from == null) throw new Exception("Missing required `from=<input-file>`");
+				if (to == null) throw new Exception("Missing required `to=<output-file>`");
 			}
-			catch (Exception e)
+			catch (Exception exn)
 			{
-				Console.Error.WriteLine(string.Format(null, Usage, e.Message, parameters));
+				Console.Error.WriteLine(string.Format(null, Usage, parameters, exn.Message));
 				return 1;
 			}
 
 			try
 			{
-				var converter = new Converter();
-				using (var reader = new XmlTextReader(from))
+				var settings = new XmlReaderSettings
 				{
+					ConformanceLevel = ConformanceLevel.Auto,
+					// net40
+					DtdProcessing = DtdProcessing.Ignore,
 					//! pandoc
-					reader.XmlResolver = null;
+					XmlResolver = null
+				};
 
-					using (var writer = new StreamWriter(to, false, Encoding.UTF8))
-					{
-						converter.Reader = reader;
-						converter.Writer = writer;
-						converter.Run();
-					}
+				using (var reader = XmlReader.Create(from, settings))
+				using (var writer = new StreamWriter(to, false, Encoding.UTF8))
+				{
+					var converter = new Converter(from, reader, writer, verbose);
+					converter.Run();
 				}
 
 				return 0;
 			}
-			catch (Exception e)
+			catch (Exception exn)
 			{
-				Console.Error.WriteLine(e.Message);
+				Console.Error.WriteLine(exn.Message);
 				return 1;
 			}
 		}

@@ -1,0 +1,49 @@
+﻿https://www.nuget.org/packages/FarNet.RedisKit
+
+= 0.1.4 =
+
+Keys panel: F7 creates a new string key.
+
+= 0.1.3 =
+
+List panel: add basic operations.
+Set panel: fix bugs.
+
+= 0.1.2 =
+
+List panel: show unsorted, with indexes.
+
+= 0.1.1 =
+
+Requires FarNet 8.1.8
+
+Set panel: add basic operations.
+
+= 0.1.0 =
+
+New panels: Hash, List, Set.
+
+New commands:
+- rk:edit
+- rk:hash
+- rk:list
+- rk:set
+
+= 0.0.4 =
+
+rk:keys
+- remove parameter `fix`, use `mask` types instead
+
+= 0.0.3 =
+
+rk:keys fix=<prefix>
+- special "fixed prefix" mode
+
+= 0.0.2 =
+
+Keys panel
+- `ShiftF5` clones the cursor key
+
+= 0.0.1 =
+
+- Keys panel with some operations

@@ -1,0 +1,119 @@
+﻿https://www.nuget.org/packages/FarNet.JavaScriptFar
+https://github.com/microsoft/ClearScript/releases
+
+= 2.0.2 =
+
+Microsoft.ClearScript 7.4.5
+
+= 2.0.1 =
+
+Exclude from the disk menu
+
+= 2.0.0 =
+
+Requires FarNet 8
+
+= 1.0.4 =
+
+Microsoft.ClearScript 7.4.4
+
+= 1.0.3 =
+
+Microsoft.ClearScript 7.4.1
+
+Make Interop args nullable.
+
+= 1.0.2 =
+
+Microsoft.ClearScript 7.3.7
+
+= 1.0.1 =
+
+master -> main, update links.
+
+= 1.0.0 =
+
+Requires FarNet 7, uses .NET 7.
+
+= 0.4.4 =
+
+Microsoft.ClearScript 7.3.4
+
+= 0.4.3 =
+
+Microsoft.ClearScript 7.3.2
+
+Internal
+- Enable nullable reference types
+
+= 0.4.2 =
+
+Requires FarNet 6.0.7
+- Use new module ids.
+- Build as ALC module.
+
+= 0.4.1 =
+
+Files *.cjs and *.mjs are treated as CommonJS and Standard modules regardless
+of session DocumentCategory. As a result, sessions may have mixed script types.
+
+= 0.4.0 =
+
+Session files:
+- use `_session.xml` instead of `_session.js.xml`
+- support 2+ session scripts, any .js in `_session.*`
+
+New configuration DocumentCategory defines how to run JS files.
+The default is Script (scripts).
+Other values: Standard and CommonJS (modules).
+* This enables many useful cases but may break existing code.
+* Use DocumentCategory Standard to restore previous behaviour.
+
+Reworked debugging, no more blocking Far Manager on starting.
+Sub-prefix `debug:` is no longer used in commands.
+
+Sub-prefix `task:` is specified immediately after `js:`.
+You can run commands as tasks as well as scripts.
+
+New variable `args`, command line script parameters after `::`
+js: @ script.js :: name = John Doe; age = 42
+
+Added interop, see samples.
+
+= 0.3.0 =
+
+Requires FarNet 6.0.3
+
+Folder sessions support configuration files `_session.js.xml`. Some powerful
+features are not enabled by default or not known: loading scripts from web,
+module search path, etc. Configure what a session needs. See new samples.
+
+= 0.2.1 =
+
+Add ClearScript.Core for Task.ToPromise() and Promise.ToTask()
+See samples: async\flow.js and live plots in FarNet.ScottPlot
+
+= 0.2.0 =
+
+Use "folder sessions". This enables many useful features:
+- common code in `_session.js`
+- more useful debugging
+- connecting to events
+- using async jobs
+
+Add `System.Diagnostics.Process` and `System.Runtime` to the pre-imported `clr` types.
+
+= 0.1.0 =
+
+New script running option `task:`.
+
+= 0.0.2 =
+
+Support modules, enable strict mode, variables must be declared.
+[F5] from the editor shows simple results in the editor title.
+Add more samples, tests, and docs.
+Rename `lib` to `clr`.
+
+= 0.0.1 =
+
+Published on NuGet.

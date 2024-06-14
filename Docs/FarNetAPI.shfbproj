@@ -1,7 +1,8 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="14.0">
   <PropertyGroup>
     <FarHome Condition="'$(FarHome)' == ''">C:\Bin\Far\x64</FarHome>
+    <SaveComponentCacheCapacity>0</SaveComponentCacheCapacity>
   </PropertyGroup>
   <PropertyGroup>
     <!-- The configuration and platform will be used to determine which
@@ -11,14 +12,14 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>{c16ada83-9972-4e47-a42a-c728d15f8c84}</ProjectGuid>
-    <SHFBSchemaVersion>1.9.5.0</SHFBSchemaVersion>
+    <SHFBSchemaVersion>2017.9.26.0</SHFBSchemaVersion>
     <!-- AssemblyName, Name, and RootNamespace are not used by SHFB but Visual
          Studio adds them anyway -->
     <AssemblyName>FarNetAPI</AssemblyName>
     <RootNamespace>FarNetAPI</RootNamespace>
     <Name>FarNetAPI</Name>
     <!-- SHFB properties -->
-    <FrameworkVersion>.NET Framework 4.0</FrameworkVersion>
+    <FrameworkVersion>.NET Core/.NET Standard/.NET 5.0+</FrameworkVersion>
     <OutputPath>.\Help\</OutputPath>
     <HtmlHelpName>FarNetAPI</HtmlHelpName>
     <Language>en-US</Language>
@@ -29,10 +30,10 @@
     <DisableCodeBlockComponent>True</DisableCodeBlockComponent>
     <CppCommentsFixup>False</CppCommentsFixup>
     <CleanIntermediates>True</CleanIntermediates>
-    <SyntaxFilters>CSharp</SyntaxFilters>
+    <SyntaxFilters>C#</SyntaxFilters>
     <SdkLinkTarget>Blank</SdkLinkTarget>
     <RootNamespaceContainer>False</RootNamespaceContainer>
-    <PresentationStyle>VS2010</PresentationStyle>
+    <PresentationStyle>VS2013</PresentationStyle>
     <Preliminary>False</Preliminary>
     <NamingMethod>MemberName</NamingMethod>
     <HelpTitle>FarNet API</HelpTitle>
@@ -40,10 +41,6 @@
     <VisibleItems>InheritedMembers, Protected</VisibleItems>
     <DocumentationSources>
       <DocumentationSource sourceFile="$(FarHome)\FarNet\FarNet.dll" xmlns="" />
-      <DocumentationSource sourceFile="$(FarHome)\FarNet\FarNet.Settings.dll" xmlns="" />
-      <DocumentationSource sourceFile="$(FarHome)\FarNet\FarNet.Settings.xml" xmlns="" />
-      <DocumentationSource sourceFile="$(FarHome)\FarNet\FarNet.Tools.dll" xmlns="" />
-      <DocumentationSource sourceFile="$(FarHome)\FarNet\FarNet.Tools.xml" xmlns="" />
       <DocumentationSource sourceFile="$(FarHome)\FarNet\FarNet.xml" xmlns="" />
       <DocumentationSource sourceFile="$(FarHome)\FarNet\Modules\PowerShellFar\PowerShellFar.dll" xmlns="" />
       <DocumentationSource sourceFile="$(FarHome)\FarNet\Modules\PowerShellFar\PowerShellFar.xml" xmlns="" />
@@ -51,16 +48,12 @@
     <NamespaceSummaries>
       <NamespaceSummaryItem name="FarNet" isDocumented="True">FarNet module API.</NamespaceSummaryItem>
       <NamespaceSummaryItem name="FarNet.Forms" isDocumented="True">FarNet dialog API.</NamespaceSummaryItem>
-      <NamespaceSummaryItem name="FarNet.Settings" isDocumented="True">Module settings.</NamespaceSummaryItem>
       <NamespaceSummaryItem name="FarNet.Tools" isDocumented="True">Extra FarNet tools.</NamespaceSummaryItem>
       <NamespaceSummaryItem name="FarNet.Works" isDocumented="False" />
       <NamespaceSummaryItem name="PowerShellFar" isDocumented="True">PowerShell scripting API.</NamespaceSummaryItem>
     </NamespaceSummaries>
     <ApiFilter>
       <Filter entryType="Namespace" fullName="FarNet" isExposed="True">
-        <Filter entryType="Class" fullName="FarNet.IFar" filterName="IFar" isExposed="True">
-          <Filter entryType="Method" fullName="FarNet.IFar.WorksPanel" filterName="WorksPanel" isExposed="False" />
-        </Filter>
         <Filter entryType="Class" fullName="FarNet.IUserInterface" filterName="IUserInterface" isExposed="True">
           <Filter entryType="Method" fullName="FarNet.IUserInterface.GetBufferContents" filterName="GetBufferContents" isExposed="False" />
           <Filter entryType="Method" fullName="FarNet.IUserInterface.ScrollBufferContents" filterName="ScrollBufferContents" isExposed="False" />
@@ -111,6 +104,17 @@
   </PropertyGroup>
   <ItemGroup>
     <ResourceItems Include="Resource.items" />
+  </ItemGroup>
+  <ItemGroup>
+    <ContentLayout Include="About.content" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="About.aml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="System.Management.Automation">
+      <HintPath>$(FarHome)\FarNet\Modules\PowerShellFar\runtimes\win\lib\net8.0\System.Management.Automation.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <!-- Import the SHFB build targets -->
   <Import Project="$(SHFBROOT)\SandcastleHelpFileBuilder.targets" />

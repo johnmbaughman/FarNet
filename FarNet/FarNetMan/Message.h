@@ -1,8 +1,6 @@
 
-/*
-FarNet plugin for Far Manager
-Copyright (c) 2006-2016 Roman Kuzmin
-*/
+// FarNet plugin for Far Manager
+// Copyright (c) Roman Kuzmin
 
 #pragma once
 class CStr;
@@ -17,16 +15,15 @@ internal:
 private:
 	bool Show();
 	int ShowDialog(int maxTextWidth, bool needButtonList);
-	CStr* CreateBlock(int& outNbItems);
+	std::vector<CStr> CreateBlock();
 	static int GetButtonLineLength(array<String^>^ buttons);
 private:
+	MessageArgs^ _args;
 	int _flags;
 	int _selected;
 	String^ _header;
-	String^ _helpTopic;
 	List<String^> _body;
 	array<String^>^ _buttons;
 	int _buttonLineLength;
-	Nullable<Point> _position;
 };
 }

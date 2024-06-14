@@ -1,0 +1,54 @@
+https://www.nuget.org/packages/FarNet.EditorKit
+
+= 2.0.1 =
+
+editorconfig 0.15.0
+
+= 2.0.0 =
+
+Requires FarNet 8
+
+= 1.0.2 =
+
+editorconfig 0.14.0
+
+= 1.0.1 =
+
+master -> main, update links.
+
+= 1.0.0 =
+
+Requires FarNet 7, uses .NET 7.
+
+= 0.1.2 =
+
+Requires FarNet 6.0.6
+- Use new module item ids.
+- Build as ALC module (see FarNet 6.0.6).
+
+= 0.1.1 =
+
+editorconfig 0.13.0
+
+The optional profile config (see README) should use `root = true`.
+
+= 0.1.0 =
+
+Requires FarNet 6, uses .NET 6.
+
+= 0.0.4 =
+
+Use netstandard2.0
+
+= 0.0.3 =
+
+Temporary work around https://github.com/editorconfig/editorconfig-core-net/issues/15
+
+= 0.0.2 =
+
+Support charset, insert_final_newline.
+Ignore special names ?NewFile?.
+
+= 0.0.1 =
+
+If you used old demo EditorKit, remove %FARPROFILE%\FarNet\EditorKit\EditorKit.binary

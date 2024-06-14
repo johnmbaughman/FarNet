@@ -1,24 +1,22 @@
 ﻿
-/*
-PowerShellFar module for Far Manager
-Copyright (c) 2006-2016 Roman Kuzmin
-*/
+// PowerShellFar module for Far Manager
+// Copyright (c) Roman Kuzmin
 
-using System;
-using System.Collections.Generic;
 using FarNet;
+using System;
 
-namespace PowerShellFar
+namespace PowerShellFar;
+
+/// <summary>
+/// Abstract table explorer.
+/// </summary>
+public abstract class TableExplorer : PowerExplorer
 {
-	/// <summary>
-	/// Abstract table explorer.
-	/// </summary>
-	public abstract class TableExplorer : PowerExplorer
+	/// <inheritdoc/>
+	protected TableExplorer(Guid typeId) : base(typeId)
 	{
-		/// <inheritdoc/>
-		protected TableExplorer(Guid typeId) : base(typeId) { }
-		/// <include file='doc.xml' path='doc/Columns/*'/>
-		[System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Performance", "CA1819:PropertiesShouldNotReturnArrays")]
-		internal virtual object[] Columns { get; set; }
 	}
+
+	/// <include file='doc.xml' path='doc/Columns/*'/>
+	internal virtual object[]? Columns { get; set; }
 }

@@ -1,20 +1,17 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
     <FarHome Condition="'$(FarHome)' == ''">C:\Bin\Far\x64</FarHome>
     <MyOutDir>$(FarHome)\FarNet\Modules\$(AssemblyName)</MyOutDir>
-    <!-- https://github.com/Microsoft/visualfsharp/issues/3656 -->
-    <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
-    <DisableImplicitSystemValueTupleReference>true</DisableImplicitSystemValueTupleReference>
-  </PropertyGroup>
-  <PropertyGroup>
-    <TargetFramework>net461</TargetFramework>
-    <RunPostBuildEvent>1</RunPostBuildEvent>
+    <TargetFramework>net8.0</TargetFramework>
     <WarningLevel>5</WarningLevel>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="..\FarNet.Common\AbcConfig.fs" />
+    <Compile Include="..\FarNet.Common\AbcService.fs" />
+    <Compile Include="..\FarNet.Common\Parser.fs" />
     <Compile Include="SourceText.fs" />
-    <Compile Include="Parser.fs" />
     <Compile Include="ProxyWriter.fs" />
     <Compile Include="Kit.fs" />
     <Compile Include="FarKit.fs" />
@@ -24,50 +21,30 @@
     <Compile Include="Session.fs" />
     <Compile Include="Checker.fs" />
     <Compile Include="IAnyMenuExt.fs" />
-    <Compile Include="IEditorExt.fs" />
     <Compile Include="Settings.fs" />
+    <Compile Include="IEditorExt.fs" />
     <Compile Include="FarErrorDrawer.fs" />
     <Compile Include="Tips.fs" />
     <Compile Include="Editor.fs" />
+    <Compile Include="Watcher.fs" />
     <Compile Include="FarInteractive.fs" />
-    <Compile Include="FarStdWriter.fs" />
     <Compile Include="FarCommand.fs" />
     <Compile Include="FarEditor.fs" />
     <Compile Include="FarTool.fs" />
+    <Compile Include="FarHost.fs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\FarNet.FSharp\FarNet.FSharp.fsproj">
-      <Private>false</Private>
-    </ProjectReference>
+    <ProjectReference Include="..\FarNet.FSharp\FarNet.FSharp.fsproj" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="FarNet">
       <HintPath>$(FarHome)\FarNet\FarNet.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="FarNet.Settings">
-      <HintPath>$(FarHome)\FarNet\FarNet.Settings.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="FarNet.Tools">
-      <HintPath>$(FarHome)\FarNet\FarNet.Tools.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="FSharp.Core">
-      <HintPath>..\..\packages\FSharp.Core\lib\net45\FSharp.Core.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="FSharp.Compiler.Service">
-      <HintPath>..\..\packages\FSharp.Compiler.Service\lib\$(TargetFramework)\FSharp.Compiler.Service.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
+    <PackageReference Include="FSharp.Core" Version="8.0.200" />
+    <PackageReference Include="FSharp.Compiler.Service" Version="43.8.200" />
   </ItemGroup>
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Copy DestinationFolder="$(MyOutDir)" SourceFiles="$(OutDir)\$(AssemblyName).dll" />
-    <Copy DestinationFolder="$(MyOutDir)" SourceFiles="$(OutDir)\$(AssemblyName).pdb" Condition="'$(Configuration)' == 'Debug'" />
-    <Delete Files="$(MyOutDir)\$(AssemblyName).pdb" Condition="'$(Configuration)' == 'Release'" />
-    <Copy DestinationFolder="$(MyOutDir)" SkipUnchangedFiles="true" SourceFiles="..\..\packages\FSharp.Compiler.Service\lib\$(TargetFramework)\FSharp.Compiler.Service.dll; ..\..\packages\System.Reflection.Metadata\lib\portable-net45+win8\System.Reflection.Metadata.dll" />
-    <Copy DestinationFolder="$(MyOutDir)" SkipUnchangedFiles="true" SourceFiles="..\..\packages\System.ValueTuple\lib\portable-net40+sl4+win8+wp8\System.ValueTuple.dll" />
-    <Copy DestinationFolder="$(FarHome)" SkipUnchangedFiles="true" SourceFiles="..\..\packages\FSharp.Core\lib\net45\FSharp.Core.dll; ..\..\packages\FSharp.Core\lib\net45\FSharp.Core.optdata; ..\..\packages\FSharp.Core\lib\net45\FSharp.Core.sigdata" />
+    <Exec Command="ib publish -Configuration $(Configuration) -FarHome $(FarHome)" />
   </Target>
 </Project>

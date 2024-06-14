@@ -1,40 +1,39 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <FarHome Condition="'$(FarHome)' == ''">C:\Bin\Far\x64</FarHome>
-    <MyOutDir>$(FarHome)\FarNet</MyOutDir>
-    <!-- https://github.com/Microsoft/visualfsharp/issues/3656 -->
     <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
-    <DisableImplicitSystemValueTupleReference>true</DisableImplicitSystemValueTupleReference>
-  </PropertyGroup>
-  <PropertyGroup>
-    <TargetFramework>net461</TargetFramework>
-    <RunPostBuildEvent>1</RunPostBuildEvent>
+    <FarHome Condition="'$(FarHome)' == ''">C:\Bin\Far\x64</FarHome>
+    <MyOutDir>$(FarHome)\FarNet\Modules\FSharpFar</MyOutDir>
+    <TargetFramework>net8.0</TargetFramework>
     <WarningLevel>5</WarningLevel>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);NU1504;NU1505</NoWarn>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="BlockBuilder.fs" />
+    <Compile Include="..\FarNet.Common\Abc.fs" />
+    <Compile Include="..\FarNet.Common\BlockBuilder.fs" />
+    <Compile Include="..\FarNet.Common\TraceBuilder.fs" />
     <Compile Include="Works.fs" />
-    <Compile Include="Assert.fs" />
     <Compile Include="Window.fs" />
-    <Compile Include="Job.fs" />
-    <Compile Include="PowerShellFar.fs" />
+    <Compile Include="FarStdWriter.fs" />
+    <Compile Include="Jobs.fs" />
+    <Compile Include="Assert.fs" />
+    <Compile Include="Test.fs" />
+    <Compile Include="PSFar.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" Version="8.0.200" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="FarNet">
       <HintPath>$(FarHome)\FarNet\FarNet.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="FSharp.Core">
-      <HintPath>..\..\packages\FSharp.Core\lib\net45\FSharp.Core.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
   </ItemGroup>
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Copy DestinationFolder="$(MyOutDir)" SourceFiles="$(OutDir)\$(AssemblyName).dll" />
-    <Copy DestinationFolder="$(MyOutDir)" SourceFiles="$(OutDir)\$(AssemblyName).xml" />
-    <Copy DestinationFolder="$(MyOutDir)" SourceFiles="$(OutDir)\$(AssemblyName).pdb" Condition="'$(Configuration)' == 'Debug'" />
-    <Delete Files="$(MyOutDir)\$(AssemblyName).pdb" Condition="'$(Configuration)' == 'Release'" />
+    <ItemGroup>
+      <MyItem Include="$(OutDir)\$(AssemblyName).*" />
+    </ItemGroup>
+    <Copy DestinationFolder="$(MyOutDir)" SourceFiles="@(MyItem)" SkipUnchangedFiles="true" />
   </Target>
 </Project>

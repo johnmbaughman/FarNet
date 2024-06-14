@@ -1,85 +1,111 @@
-
 <#
 .Synopsis
-	Build script (https://github.com/nightroman/Invoke-Build)
+	Build script, https://github.com/nightroman/Invoke-Build
 #>
 
 param(
-	$Platform = (property Platform x64)
+	$Configuration = (property Configuration Release),
+	$FarHome = (property FarHome C:\Bin\Far\x64)
 )
-$FarHome = "C:\Bin\Far\$Platform"
-$ModuleHome = "$FarHome\FarNet\Modules\Drawer"
 
-task . Build, Clean
+Set-StrictMode -Version 3
+$ModuleName = 'Drawer'
+$ModuleRoot = "$FarHome\FarNet\Modules\$ModuleName"
+$Description = 'Editor color tools. FarNet module for Far Manager.'
 
-# Build and install
-task Build {
-	Set-Alias MSBuild (Resolve-MSBuild)
-	exec { MSBuild Drawer.csproj /p:Configuration=Release /p:FarHome=$FarHome }
+task build meta, {
+	exec { dotnet build -c $Configuration /p:FarHome=$FarHome }
 }
 
-# New About-Drawer.htm
-task Help {
-	exec { MarkdownToHtml "From = About-Drawer.text; To = About-Drawer.htm" }
+task publish {
+	$null = mkdir $ModuleRoot -Force
+	Copy-Item -Destination $ModuleRoot @(
+		"bin\$Configuration\net8.0\$ModuleName.dll"
+		"bin\$Configuration\net8.0\$ModuleName.pdb"
+	)
 }
 
-task Clean {
-	remove z, bin, obj, About-Drawer.htm, FarNet.Drawer.*.nupkg
+task clean {
+	remove z, bin, obj, README.htm, FarNet.$ModuleName.*.nupkg
 }
 
-task Version {
-	$dll = Get-Item -LiteralPath $ModuleHome\Drawer.dll
-	assert ($dll.VersionInfo.FileVersion -match '^(\d+\.\d+\.\d+)\.0$')
-	($script:Version = $matches[1])
+task version {
+	($script:Version = switch -regex -file History.txt {'^= (\d+\.\d+\.\d+) =$' {$matches[1]; break}})
+	assert $script:Version
 }
 
-task Package Help, {
-	$toModule = 'z\tools\FarHome\FarNet\Modules\Drawer'
+task meta -Inputs .build.ps1, History.txt -Outputs Directory.Build.props version, {
+	Set-Content Directory.Build.props @"
+<Project>
+  <PropertyGroup>
+    <Company>https://github.com/nightroman/FarNet</Company>
+    <Copyright>Copyright (c) Roman Kuzmin</Copyright>
+    <Product>FarNet.$ModuleName</Product>
+    <Version>$Version</Version>
+    <Description>$Description</Description>
+  </PropertyGroup>
+</Project>
+"@
+}
+
+task markdown {
+	assert (Test-Path $env:MarkdownCss)
+	exec {
+		pandoc.exe @(
+			'README.md'
+			'--output=README.htm'
+			'--from=gfm'
+			'--embed-resources'
+			'--standalone'
+			"--css=$env:MarkdownCss"
+			'--metadata=pagetitle:FarNet'
+		)
+	}
+}
+
+task package markdown, version, {
+	equals "$Version.0" (Get-Item $ModuleRoot\$ModuleName.dll).VersionInfo.FileVersion
+	$toModule = "z\tools\FarHome\FarNet\Modules\$ModuleName"
 
 	remove z
 	$null = mkdir $toModule
 
-	Copy-Item -Destination $toModule `
-	About-Drawer.htm,
-	History.txt,
-	LICENSE.txt,
-	$ModuleHome\Drawer.dll
+	# meta
+	Copy-Item -Destination z @(
+		'README.md'
+		'..\Zoo\FarNetLogo.png'
+	)
+
+	# module
+	Copy-Item -Destination $toModule @(
+		'README.htm'
+		'History.txt'
+		'..\LICENSE'
+		"$ModuleRoot\$ModuleName.dll"
+	)
 }
 
-task NuGet Package, Version, {
-	$text = @'
-Drawer is the FarNet module for Far Manager.
-
-It provides a few editor color tools (drawers).
-
----
-
-To install FarNet packages, follow these steps:
-
-https://raw.githubusercontent.com/nightroman/FarNet/master/Install-FarNet.en.txt
-
----
-'@
-	# nuspec
+task nuget package, version, {
 	Set-Content z\Package.nuspec @"
 <?xml version="1.0"?>
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
 	<metadata>
-		<id>FarNet.Drawer</id>
+		<id>FarNet.$ModuleName</id>
 		<version>$Version</version>
 		<owners>Roman Kuzmin</owners>
 		<authors>Roman Kuzmin</authors>
 		<projectUrl>https://github.com/nightroman/FarNet</projectUrl>
-		<iconUrl>https://raw.githubusercontent.com/wiki/nightroman/FarNet/images/FarNetLogo.png</iconUrl>
-		<licenseUrl>https://raw.githubusercontent.com/nightroman/FarNet/master/Drawer/LICENSE.txt</licenseUrl>
-		<requireLicenseAcceptance>false</requireLicenseAcceptance>
-		<summary>$text</summary>
-		<description>$text</description>
-		<releaseNotes>https://raw.githubusercontent.com/nightroman/FarNet/master/Drawer/History.txt</releaseNotes>
+		<icon>FarNetLogo.png</icon>
+		<readme>README.md</readme>
+		<license type="expression">BSD-3-Clause</license>
+		<description>$Description</description>
+		<releaseNotes>https://github.com/nightroman/FarNet/blob/main/$ModuleName/History.txt</releaseNotes>
 		<tags>FarManager FarNet Module</tags>
 	</metadata>
 </package>
 "@
-	# pack
-	exec { NuGet pack z\Package.nuspec -NoPackageAnalysis }
+
+	exec { NuGet.exe pack z\Package.nuspec }
 }
+
+task . build, clean

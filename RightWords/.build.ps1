@@ -1,98 +1,138 @@
-
 <#
 .Synopsis
-	Build script (https://github.com/nightroman/Invoke-Build)
+	Build script, https://github.com/nightroman/Invoke-Build
 #>
 
 param(
-	$Platform = (property Platform x64)
+	$Configuration = (property Configuration Release),
+	$FarHome = (property FarHome C:\Bin\Far\x64)
 )
 
-$FarHome = "C:\Bin\Far\$Platform"
-$fromModule = "$FarHome\FarNet\Modules\RightWords"
-$fromNHunspell = "$FarHome\FarNet\NHunspell"
+Set-StrictMode -Version 3
+$ModuleName = 'RightWords'
+$ModuleRoot = "$FarHome\FarNet\Modules\$ModuleName"
+$Description = 'Spell-checker. FarNet module for Far Manager.'
 
-task . Build, Clean
-
-task Build {
-	use 4.0 MSBuild
-	exec { MSBuild RightWords.csproj /p:Configuration=Release /p:FarHome=$FarHome }
+task build meta, {
+	exec { dotnet build -c $Configuration /p:FarHome=$FarHome }
 }
 
-task Clean {
-	remove z, bin, obj, About-RightWords.htm, FarNet.RightWords.*.nupkg
+task publish {
+	exec { dotnet publish "$ModuleName.csproj" -c $Configuration -o $ModuleRoot --no-build }
+},
+help,
+resgen
+
+task help @{
+	Inputs = 'README.md'
+	Outputs = "$ModuleRoot\RightWords.hlf"
+	Jobs = {
+		exec { pandoc.exe README.md --output=z.htm --from=gfm }
+		exec { HtmlToFarHelp from=z.htm to=$ModuleRoot\RightWords.hlf }
+		remove z.htm
+	}
 }
 
-task Help {
-	exec { MarkdownToHtml From=About-RightWords.text To=About-RightWords.htm }
+# https://github.com/nightroman/PowerShelf/blob/main/Invoke-Environment.ps1
+task resgen @{
+	Inputs = 'RightWords.restext', 'RightWords.ru.restext'
+	Outputs = "$ModuleRoot\RightWords.resources", "$ModuleRoot\RightWords.ru.resources"
+	Partial = $true
+	Jobs = {
+		begin {
+			$VsDevCmd = @(Get-Item "$env:ProgramFiles\Microsoft Visual Studio\2022\*\Common7\Tools\VsDevCmd.bat")
+			Invoke-Environment.ps1 -File ($VsDevCmd[0])
+		}
+		process {
+			exec {resgen.exe $_ $2}
+		}
+	}
 }
 
-task Version {
-	$dll = Get-Item -LiteralPath $fromModule\RightWords.dll
+task clean {
+	remove z, bin, obj, README.htm, *.nupkg
+}
+
+task version {
+	($script:Version = switch -regex -file History.txt {'^= (\d+\.\d+\.\d+) =$' {$matches[1]; break}})
+	assert $script:Version
+}
+
+task meta -Inputs .build.ps1, History.txt -Outputs Directory.Build.props -Jobs version, {
+	Set-Content Directory.Build.props @"
+<Project>
+  <PropertyGroup>
+    <Company>https://github.com/nightroman/FarNet</Company>
+    <Copyright>Copyright (c) Roman Kuzmin</Copyright>
+    <Product>FarNet.$ModuleName</Product>
+    <Version>$Version</Version>
+    <Description>$Description</Description>
+  </PropertyGroup>
+</Project>
+"@
+}
+
+task markdown {
+	assert (Test-Path $env:MarkdownCss)
+	exec { pandoc.exe @(
+		'README.md'
+		'--output=README.htm'
+		'--from=gfm'
+		'--embed-resources'
+		'--standalone'
+		"--css=$env:MarkdownCss"
+		'--standalone', '--metadata=pagetitle=RightWords'
+	)}
+}
+
+task package markdown, version, {
+	$dll = Get-Item "$ModuleRoot\RightWords.dll"
 	assert ($dll.VersionInfo.FileVersion -match '^(\d+\.\d+\.\d+)\.0$')
-	$script:Version = $matches[1]
-	$Version
-}
-
-task Package Help, {
-	$toModule = 'z\tools\FarHome\FarNet\Modules\RightWords'
-	$toNHunspell = 'z\tools\FarHome\FarNet\NHunspell'
+	equals ($matches[1]) $script:Version
 
 	remove z
-	$null = mkdir $toModule, $toNHunspell
+	$toModule = mkdir "z\tools\FarHome\FarNet\Modules\$ModuleName"
 
-	Copy-Item -Destination $toModule `
-	About-RightWords.htm,
-	History.txt,
-	LICENSE.txt,
-	RightWords.macro.lua,
-	$fromModule\RightWords.dll,
-	$fromModule\RightWords.resources,
-	$fromModule\RightWords.ru.resources
+	# module
+	exec { robocopy $ModuleRoot $toModule /s /xf *.pdb } (0..2)
+	equals 7 (Get-ChildItem $toModule -Recurse -File).Count
 
-	Copy-Item -Destination $toNHunspell `
-	$fromNHunspell\Hunspellx64.dll,
-	$fromNHunspell\Hunspellx86.dll,
-	$fromNHunspell\NHunspell.dll,
-	$fromNHunspell\NHunspell.xml
+	# meta
+	Copy-Item -Destination z @(
+		'README.md'
+		'..\Zoo\FarNetLogo.png'
+	)
+
+	# module
+	Copy-Item -Destination $toModule @(
+		"README.htm"
+		"History.txt"
+		"..\LICENSE"
+		"RightWords.macro.lua"
+	)
 }
 
-task NuGet Package, Version, {
-	$text = @'
-RightWords is the FarNet module for FarManager.
-
-It provides the spell-checker and thesaurus based on NHunspell. The core
-Hunspell is used in OpenOffice and it works with dictionaries published
-on OpenOffice.org.
-
----
-
-To install FarNet packages, follow these steps:
-
-https://raw.githubusercontent.com/nightroman/FarNet/master/Install-FarNet.en.txt
-
----
-'@
-	# nuspec
+task nuget package, version, {
 	Set-Content z\Package.nuspec @"
 <?xml version="1.0"?>
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
 	<metadata>
 		<id>FarNet.RightWords</id>
-		<version>$Version</version>
+		<version>$script:Version</version>
 		<authors>Roman Kuzmin</authors>
 		<owners>Roman Kuzmin</owners>
 		<projectUrl>https://github.com/nightroman/FarNet</projectUrl>
-		<iconUrl>https://raw.githubusercontent.com/wiki/nightroman/FarNet/images/FarNetLogo.png</iconUrl>
-		<licenseUrl>https://raw.githubusercontent.com/nightroman/FarNet/master/RightWords/LICENSE.txt</licenseUrl>
-		<requireLicenseAcceptance>false</requireLicenseAcceptance>
-		<summary>$text</summary>
-		<description>$text</description>
-		<releaseNotes>https://raw.githubusercontent.com/nightroman/FarNet/master/RightWords/History.txt</releaseNotes>
-		<tags>FarManager FarNet Module NHunspell</tags>
+		<icon>FarNetLogo.png</icon>
+		<readme>README.md</readme>
+		<license type="expression">BSD-3-Clause</license>
+		<description>$Description</description>
+		<releaseNotes>https://github.com/nightroman/FarNet/blob/main/RightWords/History.txt</releaseNotes>
+		<tags>FarManager FarNet Module Hunspell</tags>
 	</metadata>
 </package>
 "@
-	# pack
-	exec { NuGet pack z\Package.nuspec -NoPackageAnalysis }
+
+	exec { NuGet pack z\Package.nuspec }
 }
+
+task . build, clean

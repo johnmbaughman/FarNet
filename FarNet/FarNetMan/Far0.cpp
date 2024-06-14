@@ -6,8 +6,9 @@
 // The `from` == OPEN_VIEWER. But the menu has been created for `window` == WTYPE_PANELS.
 // The `item` is related to the panel handlers. But technically it is strange to call them for not really a panel.
 
-#include "StdAfx.h"
+#include "stdafx.h"
 #include "Far0.h"
+#include "Far1.h"
 #include "Dialog.h"
 #include "Editor.h"
 #include "Panel0.h"
@@ -16,7 +17,7 @@
 #include "Wrappers.h"
 
 namespace FarNet
-{;
+{
 static PluginMenuItem _Config;
 static PluginMenuItem _Dialog;
 static PluginMenuItem _Disk;
@@ -24,7 +25,8 @@ static PluginMenuItem _Editor;
 static PluginMenuItem _Panels;
 static PluginMenuItem _Viewer;
 
-ref class FarNetHost : Works::Host
+// Works::Host::Instance instance.
+ref class Host : Works::Host
 {
 public:
 	virtual void RegisterProxyCommand(IModuleCommand^ info) override
@@ -57,6 +59,24 @@ public:
 	}
 };
 
+// Works::Far2::Api instance.
+ref class Far2 : Works::Far2
+{
+public:
+	virtual FarNet::Works::IPanelWorks^ CreatePanel(Panel^ panel, Explorer^ explorer) override
+	{
+		return gcnew Panel2(panel, explorer);
+	}
+	virtual Task^ WaitSteps() override
+	{
+		return Far0::WaitSteps();
+	}
+	virtual WaitHandle^ PostMacroWait(String^ macro) override
+	{
+		return Far0::PostMacroWait(macro);
+	}
+};
+
 void Far0::FreePluginMenuItem(PluginMenuItem& p)
 {
 	if (p.Count == 0) return;
@@ -75,26 +95,34 @@ void Far0::FreePluginMenuItem(PluginMenuItem& p)
 
 void Far0::Start()
 {
-	// init async operations
-	_hMutex = CreateMutex(nullptr, FALSE, nullptr);
+	try
+	{
+		Log::Source->TraceInformation("Start..");
+		auto sw = Stopwatch::StartNew();
 
-	// connect the host
-	Works::Host::Instance = gcnew FarNetHost();
+		// inject
+		Far::Api = gcnew Far1();
+		Works::Far2::Api = gcnew Far2();
+		Works::Host::Instance = gcnew Host();
 
-	// module path
-	String^ path = Configuration::GetString(Configuration::Modules);
-	if (!path)
-		path = Environment::ExpandEnvironmentVariables("%FARHOME%\\FarNet\\Modules");
+		// module folder
+		auto path = Environment::ExpandEnvironmentVariables("%FARHOME%\\FarNet\\Modules");
 
-	// load
-	Works::ModuleLoader loader;
-	loader.LoadModules(path);
+		// load modules
+		Works::ModuleLoader().LoadModules(path);
+
+		Log::Source->TraceInformation("Started {0}", sw->Elapsed);
+	}
+	catch (Exception^ ex)
+	{
+		Console::WriteLine(ex->ToString());
+		Console::ReadLine();
+	}
 }
 
 //! Don't use Far UI
 void Far0::Stop()
 {
-	CloseHandle(_hMutex);
 	Works::ModuleLoader::UnloadModules();
 
 	FreePluginMenuItem(_Config);
@@ -117,8 +145,6 @@ void Far0::UnregisterProxyAction(IModuleAction^ action)
 			return;
 		}
 	}
-
-	Log::Source->TraceInformation("Unregister {0}", action);
 
 	Works::Host::Actions->Remove(action->Id);
 
@@ -152,8 +178,6 @@ void Far0::UnregisterProxyAction(IModuleAction^ action)
 
 void Far0::UnregisterProxyTool(IModuleTool^ tool)
 {
-	Log::Source->TraceInformation("Unregister {0}", tool);
-
 	Works::Host::Actions->Remove(tool->Id);
 
 	InvalidateProxyTool(tool->Options);
@@ -200,8 +224,6 @@ void Far0::InvalidateProxyTool(ModuleToolOptions options)
 
 void Far0::RegisterProxyCommand(IModuleCommand^ info)
 {
-	Log::Source->TraceInformation("Register {0}", info);
-
 	Works::Host::Actions->Add(info->Id, info);
 
 	_registeredCommand.Add(info);
@@ -211,8 +233,6 @@ void Far0::RegisterProxyCommand(IModuleCommand^ info)
 
 void Far0::RegisterProxyDrawer(IModuleDrawer^ info)
 {
-	Log::Source->TraceInformation("Register {0}", info);
-
 	Works::Host::Actions->Add(info->Id, info);
 
 	_registeredDrawer.Add(info);
@@ -220,8 +240,6 @@ void Far0::RegisterProxyDrawer(IModuleDrawer^ info)
 
 void Far0::RegisterProxyEditor(IModuleEditor^ info)
 {
-	Log::Source->TraceInformation("Register {0}", info);
-
 	Works::Host::Actions->Add(info->Id, info);
 
 	_registeredEditor.Add(info);
@@ -229,8 +247,6 @@ void Far0::RegisterProxyEditor(IModuleEditor^ info)
 
 void Far0::RegisterProxyTool(IModuleTool^ info)
 {
-	Log::Source->TraceInformation("Register {0}", info);
-
 	Works::Host::Actions->Add(info->Id, info);
 
 	InvalidateProxyTool(info->Options);
@@ -277,7 +293,7 @@ void Far0::AsGetPluginInfo(PluginInfo* pi)
 			for(int i = _toolConfig->Length; --i >= 0;)
 			{
 				guids[i + 1] = ToGUID(_toolConfig[i]->Id);
-				strings[i + 1] = NewChars(GetMenuText(_toolConfig[i]));
+				strings[i + 1] = NewChars(_toolConfig[i]->Name);
 			}
 		}
 		pi->PluginConfig = _Config;
@@ -305,7 +321,7 @@ void Far0::AsGetPluginInfo(PluginInfo* pi)
 				for(int i = _toolDialog->Length; --i >= 0;)
 				{
 					guids[i + 1] = ToGUID(_toolDialog[i]->Id);
-					strings[i + 1] = NewChars(GetMenuText(_toolDialog[i]));
+					strings[i + 1] = NewChars(_toolDialog[i]->Name);
 				}
 			}
 			pi->PluginMenu = _Dialog;
@@ -329,7 +345,7 @@ void Far0::AsGetPluginInfo(PluginInfo* pi)
 				for(int i = _toolEditor->Length; --i >= 0;)
 				{
 					guids[i + 1] = ToGUID(_toolEditor[i]->Id);
-					strings[i + 1] = NewChars(GetMenuText(_toolEditor[i]));
+					strings[i + 1] = NewChars(_toolEditor[i]->Name);
 				}
 			}
 			pi->PluginMenu = _Editor;
@@ -353,7 +369,7 @@ void Far0::AsGetPluginInfo(PluginInfo* pi)
 				for(int i = _toolViewer->Length; --i >= 0;)
 				{
 					guids[i + 1] = ToGUID(_toolViewer[i]->Id);
-					strings[i + 1] = NewChars(GetMenuText(_toolViewer[i]));
+					strings[i + 1] = NewChars(_toolViewer[i]->Name);
 				}
 			}
 			pi->PluginMenu = _Viewer;
@@ -378,7 +394,7 @@ void Far0::AsGetPluginInfo(PluginInfo* pi)
 				for(int i = _toolPanels->Length; --i >= 0;)
 				{
 					guids[i + 1] = ToGUID(_toolPanels[i]->Id);
-					strings[i + 1] = NewChars(GetMenuText(_toolPanels[i]));
+					strings[i + 1] = NewChars(_toolPanels[i]->Name);
 				}
 			}
 			pi->PluginMenu = _Panels;
@@ -409,18 +425,18 @@ void Far0::AsGetPluginInfo(PluginInfo* pi)
 		break;
 	}
 
-	if (_registeredCommand.Count)
+	// command prefixes
 	{
 		if (_prefixes == 0)
 		{
-			String^ PrefString = String::Empty;
-			for each(IModuleCommand^ it in _registeredCommand)
+			auto sb = gcnew StringBuilder("fn");
+			for each (IModuleCommand ^ it in _registeredCommand)
 			{
-				if (PrefString->Length > 0)
-					PrefString = String::Concat(PrefString, ":");
-				PrefString = String::Concat(PrefString, it->Prefix);
+				sb->Append(":");
+				sb->Append(it->Prefix);
 			}
-			_prefixes = new CStr(PrefString);
+
+			_prefixes = new CStr(sb->ToString());
 		}
 
 		pi->CommandPrefix = *_prefixes;
@@ -448,29 +464,48 @@ bool Far0::AsConfigure(const ConfigureInfo* info) //config//
 // It may create a panel waiting for opening.
 HANDLE Far0::AsOpen(const OpenInfo* info)
 {
-	Panel0::BeginOpenMode();
+	// case: macro
+	if (info->OpenFrom == OPEN_FROMMACRO)
+	{
+		//! do not trace yet, it is called often on tests
+		OpenMacroInfo* mi = (OpenMacroInfo*)info->Data;
 
+		// we expect a string but users may call with garbage
+		if (mi->Count == 0 || mi->Values[0].Type != FMVT_STRING)
+			return 0;
+
+		// the command
+		auto command = mi->Values[0].String;
+
+		// called to signal some macro completion
+		if (lstrcmpW(command, L"signal_macro") == 0)
+		{
+			auto wait = _macroWait.Dequeue();
+			wait->Set();
+			return 0;
+		}
+
+		// normal command
+		Log::Source->TraceInformation("OPEN_FROMMACRO");
+		if (InvokeCommand(command, OPEN_FROMMACRO))
+			return (HANDLE)1;
+		else
+			return 0;
+	}
+
+	// now we can open panels
+	Panel0::BeginOpenMode();
 	try
 	{
 		switch(info->OpenFrom)
 		{
-		case OPEN_FROMMACRO:
-			{
-				Log::Source->TraceInformation("OPEN_FROMMACRO");
-				OpenMacroInfo* mi = (OpenMacroInfo*)info->Data;
-				if (mi->Count == 1 && mi->Values[0].Type == FMVT_STRING)
-				{
-					if (InvokeCommand(mi->Values[0].String, true))
-						return (HANDLE)1;
-					else
-						return 0;
-				}
-			}
-			break;
 		case OPEN_COMMANDLINE:
 			{
 				Log::Source->TraceInformation("OPEN_COMMANDLINE");
-				InvokeCommand(((OpenCommandLineInfo*)info->Data)->CommandLine, false);
+				InvokeCommand(((OpenCommandLineInfo*)info->Data)->CommandLine, OPEN_COMMANDLINE);
+
+				if (Works::Test::IsTestCommand)
+					Works::Test::Exit(nullptr);
 			}
 			break;
 		case OPEN_LEFTDISKMENU:
@@ -566,132 +601,16 @@ HANDLE Far0::AsOpen(const OpenInfo* info)
 		// no panel
 		return nullptr;
 	}
-	finally
+	catch (Exception^ ex)
 	{
-		Panel0::EndOpenMode();
-	}
-}
-
-void Far0::DisposeSteps()
-{
-	while(_steps->Count)
-		delete _steps->Pop();
-}
-
-// Plugin.Menu is not a replacement for F11, it is less predictable on posted keys and async jobs.
-void Far0::PostSelf()
-{
-	Far::Api->PostMacro("Keys('F11') Menu.Select('FarNet', 2) Keys('Enter')", Works::Kit::MacroOutput, false);
-
-	// ++level. With no steps it is normally expected to be 0.
-	// Just in case something was wrong set it to expected 1.
-	if (!_steps || !_steps->Count)
-		_levelPostSelf = 1;
-	else
-		++_levelPostSelf;
-}
-
-// When PostSteps is better than PostJob: PostSteps calls from OpenW(),
-// so that steps can open panels and do most of needed tasks. PostJob
-// does not allow opening panels, calling PostMacro, etc.
-void Far0::PostSteps(IEnumerable<Object^>^ steps)
-{
-	if (!_steps)
-		_steps = gcnew Stack<IEnumerator<Object^>^>;
-
-	_steps->Push(steps->GetEnumerator());
-
-	if (_steps->Count == 1)
-		PostSelf();
-}
-
-/*
-Why fake steps. On Action we PostSelf() and then action(). PostSelf() cannot be
-undone, OpenW() is going to be called anyway. Fake steps are to ignore this call.
-
-Why skip step. MoveNext or Current can start modal UI. [F11] should work for
-a user as usual there even if we are self posted. Thus, we set the flag
-before calling these members and drop it after.
-
-_140316_042825..ps1
-_140316_044206..ps1
-*/
-void Far0::OpenMenu(ModuleToolOptions from)
-{
-	// just show the menu
-	if (!_steps || !_steps->Count || _skipStep)
-	{
-		ShowMenu(from);
-		return;
-	}
-
-	--_levelPostSelf;
-
-	// the current step iterator, null for fake steps to ignore
-	IEnumerator<Object^>^ enumerator = _steps->Peek();
-	if (!enumerator)
-	{
-		_steps->Pop();
-		return;
-	}
-
-	// invoke the next step
-	try
-	{
-		_skipStep = true;
-
-		// end of steps
-		if (!enumerator->MoveNext())
-		{
-			delete _steps->Pop();
-
-			if (_steps->Count)
-				PostSelf();
-
-			return;
-		}
-
-		Object^ current = enumerator->Current;
-		if (!current)
-		{
-			PostSelf();
-			return;
-		}
-
-		String^ macro = dynamic_cast<String^>(current);
-		if (macro)
-		{
-			if (macro->Length > 0)
-				Far::Api->PostMacro(macro);
-
-			PostSelf();
-			return;
-		}
-
-		Action^ action = dynamic_cast<Action^>(current);
-		if (action)
-		{
-			_skipStep = false;
-			PostSelf();
-			action();
-			return;
-		}
-
-		throw gcnew InvalidOperationException("Unexpected step type: " + current->GetType());
-	}
-	catch(...)
-	{
-		DisposeSteps();
-
-		// post fake steps
-		if (_levelPostSelf > 0)
-			_steps->Push(nullptr);
+		if (info->OpenFrom == OPEN_COMMANDLINE && Works::Test::IsTestCommand)
+			Works::Test::Exit(ex);
 
 		throw;
 	}
 	finally
 	{
-		_skipStep = false;
+		Panel0::EndOpenMode();
 	}
 }
 
@@ -699,16 +618,16 @@ void Far0::OpenConfig() //config//
 {
 	IMenu^ menu = Far::Api->CreateMenu();
 	menu->AutoAssignHotkeys = true;
-	menu->HelpTopic = "MenuConfig";
+	menu->HelpTopic = "config-menu";
 	menu->Title = "Modules configuration";
 
-	List<IModuleTool^> tools(Works::Host::EnumTools());
+	auto tools = Works::Host::ListTools();
 
 	String^ format = "{0,-10} : {1,2}";
 	menu->Add(String::Format(format, Res::ModuleCommands, _registeredCommand.Count));
 	menu->Add(String::Format(format, Res::ModuleDrawers, _registeredDrawer.Count));
 	menu->Add(String::Format(format, Res::ModuleEditors, _registeredEditor.Count));
-	menu->Add(String::Format(format, Res::ModuleTools, tools.Count));
+	menu->Add(String::Format(format, Res::ModuleTools, tools->Count));
 	menu->Add("Settings")->IsSeparator = true;
 	menu->Add("UI culture");
 
@@ -718,22 +637,22 @@ void Far0::OpenConfig() //config//
 		{
 		case 0:
 			if (_registeredCommand.Count)
-				Works::ConfigCommand::Show(%_registeredCommand, Far0::_helpTopic + "ConfigCommand");
+				Works::ConfigCommand::Show(%_registeredCommand);
 			break;
 		case 1:
 			if (_registeredDrawer.Count)
-				Works::ConfigDrawer::Show(%_registeredDrawer, Far0::_helpTopic + "ConfigDrawer");
+				Works::ConfigDrawer::Show(%_registeredDrawer);
 			break;
 		case 2:
 			if (_registeredEditor.Count)
-				Works::ConfigEditor::Show(%_registeredEditor, Far0::_helpTopic + "ConfigEditor");
+				Works::ConfigEditor::Show(%_registeredEditor);
 			break;
 		case 3:
-			if (tools.Count)
-				Works::ConfigTool::Show(%tools, Far0::_helpTopic + "ConfigTool", gcnew Func<IModuleTool^, String^>(&Far0::GetMenuText));
+			if (tools->Count)
+				Works::ConfigTool::Show(tools);
 			break;
 		case 5: // +2, mind separator
-			Works::ConfigUICulture::Show(Works::ModuleLoader::GatherModuleManagers(), Far0::_helpTopic + "ConfigUICulture");
+			Works::ConfigUICulture::Show(Works::ModuleLoader::GatherModuleManagers());
 			break;
 		}
 	}
@@ -792,43 +711,34 @@ void Far0::AsProcessSynchroEvent(const ProcessSynchroEventInfo* info)
 	if (info->Event != SE_COMMONSYNCHRO)
 		return;
 
-	// remove pending
-	Action^ handler = nullptr;
-	WaitForSingleObject(_hMutex, INFINITE);
+	Action^ job = nullptr;
+	Monitor::Enter(% _jobs);
 	try
 	{
-		intptr_t id = (intptr_t)info->Param;
-		handler = _jobs[id];
-		_jobs.Remove(id);
+		job = _jobs.Dequeue();
 	}
 	finally
 	{
-		ReleaseMutex(_hMutex);
+		Monitor::Exit(% _jobs);
 	}
 
-	// invoke out of the lock
-	Log::Source->TraceInformation("AsProcessSynchroEvent: invoke job: {0}", gcnew Works::DelegateToString(handler));
-	handler();
+	job();
 }
 
-void Far0::PostJob(Action^ handler)
+void Far0::PostJob(Action^ job)
 {
-	if (!handler)
-		throw gcnew ArgumentNullException("handler");
+	if (!job)
+		throw gcnew ArgumentNullException("job");
 
-	Works::DelegateToString log(handler);
-
-	WaitForSingleObject(_hMutex, INFINITE);
+	Monitor::Enter(% _jobs);
 	try
 	{
-		intptr_t id = _nextJobId++;
-		_jobs.Add(id, handler);
-		Info.AdvControl(&MainGuid, ACTL_SYNCHRO, 0, (void*)id);
-		Log::Source->TraceInformation("PostJob: post job: {0}", %log);
+		_jobs.Enqueue(job);
+		Info.AdvControl(&MainGuid, ACTL_SYNCHRO, 0, 0);
 	}
 	finally
 	{
-		ReleaseMutex(_hMutex);
+		Monitor::Exit(% _jobs);
 	}
 }
 
@@ -874,13 +784,9 @@ void Far0::InvalidateProxyCommand()
 	_prefixes = 0;
 }
 
-String^ Far0::GetMenuText(IModuleTool^ tool)
-{
-	return tool->Name;
-}
-
 void Far0::ShowMenu(ModuleToolOptions from)
 {
+	String^ sInvoke = "&Invoke";
 	String^ sPanels = "&Panels";
 	String^ sDrawers = "&Drawers";
 	String^ sEditors = "&Editors";
@@ -889,8 +795,11 @@ void Far0::ShowMenu(ModuleToolOptions from)
 	String^ sSettings = "&Settings";
 
 	IMenu^ menu = Far::Api->CreateMenu();
-	menu->HelpTopic = "MenuMain";
+	menu->HelpTopic = "plugin-menu";
 	menu->Title = "FarNet";
+
+	// Invoke
+	menu->Add(sInvoke);
 
 	// Panels
 	if (from == ModuleToolOptions::Panels)
@@ -910,8 +819,7 @@ void Far0::ShowMenu(ModuleToolOptions from)
 	menu->Add(sConsole);
 
 	// Settings
-	if (from == ModuleToolOptions::Panels)
-		menu->Add(sSettings);
+	menu->Add(sSettings);
 
 	if (!menu->Show())
 		return;
@@ -919,7 +827,7 @@ void Far0::ShowMenu(ModuleToolOptions from)
 	String^ text = menu->Items[menu->Selected]->Text;
 
 	if (Object::ReferenceEquals(text, sSettings))
-		Works::Config::SettingsUI::ShowSettings(Works::ModuleLoader::EnumSettings());
+		Works::SettingsUI::ShowSettings(Works::ModuleLoader::GatherModuleManagers());
 	else if (Object::ReferenceEquals(text, sPanels))
 		Works::PanelTools::ShowPanelsMenu();
 	else if (Object::ReferenceEquals(text, sEditors))
@@ -928,6 +836,8 @@ void Far0::ShowMenu(ModuleToolOptions from)
 		Works::EditorTools::ShowViewersMenu();
 	else if (Object::ReferenceEquals(text, sDrawers))
 		ShowDrawersMenu();
+	else if (Object::ReferenceEquals(text, sInvoke))
+		Works::Script::InvokeCommand();
 	else
 		ShowConsoleMenu();
 }
@@ -938,7 +848,7 @@ void Far0::ShowDrawersMenu()
 
 	IMenu^ menu = Far::Api->CreateMenu();
 	menu->Title = "Drawers";
-	menu->HelpTopic = "MenuDrawers";
+	menu->HelpTopic = "drawers-menu";
 
 	for each(IModuleDrawer^ drawer in _registeredDrawer)
 	{
@@ -961,7 +871,7 @@ void Far0::ShowDrawersMenu()
 void Far0::ShowConsoleMenu()
 {
 	IMenu^ menu = Far::Api->CreateMenu();
-	menu->HelpTopic = "MenuConsole";
+	menu->HelpTopic = "console-menu";
 	menu->Title = "Console";
 
 	menu->Add("&Decrease font size");
@@ -1033,7 +943,8 @@ public:
 	}
 };
 
-bool Far0::InvokeCommand(const wchar_t* command, bool isMacro)
+// `isMacro` is true when a command is invoked from macro or input
+bool Far0::InvokeCommand(const wchar_t* command, OPENFROM from)
 {
 	// asynchronous command
 	bool isAsync = command[0] == ':';
@@ -1046,19 +957,30 @@ bool Far0::InvokeCommand(const wchar_t* command, bool isMacro)
 	// find the colon
 	const wchar_t* colon = wcschr(command, ':');
 
-	// missing colon is possible from macro
+	// missing colon is possible from macro or input
 	if (!colon)
-		throw gcnew InvalidOperationException("Invalid module command syntax.");
+		throw gcnew InvalidOperationException("Commands should start with prefixes.");
 
-	// get the prefix, find and invoke the command handler
-	String^ prefix = gcnew String(command, 0, (int)(colon - command));
+	// get the prefix
+	auto prefix = gcnew String(command, 0, (int)(colon - command));
+	auto text = gcnew String(colon + 1);
+
+	// case: script
+	if (prefix->Equals("fn", StringComparison::OrdinalIgnoreCase))
+	{
+		Works::Script::InvokeScript(text);
+		return true;
+	}
+
+	// find and invoke the command handler
 	for each(IModuleCommand^ it in _registeredCommand)
 	{
 		if (!prefix->Equals(it->Prefix, StringComparison::OrdinalIgnoreCase))
 			continue;
 
-		ModuleCommandEventArgs^ e = gcnew ModuleCommandEventArgs(gcnew String(colon + 1));
-		e->IsMacro = isMacro;
+		ModuleCommandEventArgs^ e = gcnew ModuleCommandEventArgs(text);
+		e->Prefix = prefix;
+		e->IsMacro = from != OPEN_COMMANDLINE;
 
 		// invoke later
 		if (isAsync)
@@ -1077,8 +999,94 @@ bool Far0::InvokeCommand(const wchar_t* command, bool isMacro)
 	}
 
 	// A missing prefix is not a fatal error, e.g. a module is not istalled.
-	// The calling macro should be able to recover on 0 result, so return false.
-	return false;
+	// Calling macros should be able to recover on 0 result, so return false.
+	if (from == OPEN_FROMMACRO)
+		return false;
+
+	throw gcnew InvalidOperationException("Unknown command prefix: " + prefix);
 }
 
+// Plugin.Menu is not a replacement for F11, it is less predictable on posted keys and async jobs.
+void Far0::PostSelf()
+{
+	Far::Api->PostMacro("Keys('F11') Menu.Select('FarNet', 2) Keys('Enter')", Works::Kit::MacroOutput, false);
+}
+
+//! must be sync call
+void Far0::PostStep(Action^ step)
+{
+	_steps.Enqueue(step);
+	if (_steps.Count == 1)
+	{
+		_stepsTask = gcnew TaskCompletionSource<Object^>;
+		PostSelf();
+	}
+}
+
+//! may be async call
+Task^ Far0::WaitSteps()
+{
+	//! cache, if it is nulled by main then `->Task` NRE
+	auto task = _stepsTask;
+	if (task)
+		return task->Task;
+	else
+		return Task::FromResult<Object^>(nullptr);
+}
+
+//! must be sync call, so we use the queue, first posted/added will be first signaled/removed
+WaitHandle^ Far0::PostMacroWait(String^ macro)
+{
+	//! post 2 macros instead of 1 combined because:
+	//! - clear syntax error messages without 2nd part
+	//! - combined does not work any faster, so KISS
+	Far::Api->PostMacro(macro);
+	Far::Api->PostMacro("Plugin.SyncCall('10435532-9BB3-487B-A045-B0E6ECAAB6BC', 'signal_macro')");
+
+	// add and return wait handle, it will be signaled and removed when signal_macro is called
+	auto wait = gcnew ManualResetEvent(false);
+	_macroWait.Enqueue(wait);
+	return wait;
+}
+
+void Far0::OpenMenu(ModuleToolOptions from)
+{
+	// normal call for the menu
+	if (_steps.Count == 0)
+	{
+		ShowMenu(from);
+		return;
+	}
+
+	// invoke one posted step
+	try
+	{
+		//! peek, to avoid premature PostSelf in PostStep possibly called by this step
+		auto step = _steps.Peek();
+		
+		// invoke this step
+		step();
+
+		// now dequeue and PostSelf if there are more steps
+		_steps.Dequeue();
+		if (_steps.Count > 0)
+			PostSelf();
+	}
+	catch (...)
+	{
+		// discard steps and re-throw
+		_steps.Clear();
+		throw;
+	}
+	finally
+	{
+		// complete the task
+		if (_steps.Count == 0)
+		{
+			auto task = _stepsTask;
+			_stepsTask = nullptr;
+			task->SetResult(nullptr);
+		}
+	}
+}
 }

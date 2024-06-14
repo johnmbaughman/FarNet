@@ -2,51 +2,53 @@
 open FarNet
 open System
 open System.IO
-open FSharp.Compiler.SourceCodeServices
-open FSharp.Compiler
+open FSharp.Compiler.EditorServices
+open FSharp.Compiler.Tokenization
+open FSharp.Compiler.CodeAnalysis
 
 let load (editor: IEditor) =
-    editor.Save ()
+    editor.Save()
 
     let file = editor.FileName
-    let ses = Session.GetOrCreate (Config.defaultFileForFile file)
+    let ses = Session.GetOrCreate(Config.defaultFileForFile file)
     let temp = far.TempName "F#"
 
     do
-        use writer = new StreamWriter (temp)
+        use writer = new StreamWriter(temp)
 
         // session errors first or issues may look cryptic
         if ses.Errors.Length > 0 then
             writer.Write ses.Errors
 
-        // eval anyway, session errors may be warnings
-        Session.Eval (writer, fun () -> ses.EvalScript (writer, file))
+        // eval
+        if ses.Ok then
+            Session.Eval(writer, fun () -> ses.EvalScript(writer, file))
 
     showTempFile temp "F# Output"
 
 let showErrors (editor: IEditor) =
     let errors =
         editor.MyErrors.Value
-        |> Array.sortBy (fun x -> x.FileName, x.StartLineAlternate, x.StartColumn)
+        |> Array.sortBy (fun x -> x.FileName, x.StartLine, x.StartColumn)
 
-    let menu = far.CreateListMenu (Title = "F# errors", ShowAmpersands = true, UsualMargins = true, IncrementalOptions = PatternOptions.Substring)
+    let menu = far.CreateListMenu(Title = "F# errors", ShowAmpersands = true, UsualMargins = true, IncrementalOptions = PatternOptions.Substring)
 
-    errors |> menu.ShowItems FSharpErrorInfo.strErrorLine (fun error ->
-        editor.GoTo (error.StartColumn, error.StartLineAlternate - 1)
-        editor.Redraw ()
+    errors |> menu.ShowItems FSharpDiagnostic.strErrorLine (fun error ->
+        editor.GoTo(error.StartColumn, error.StartLine - 1)
+        editor.Redraw()
     )
 
 let sourceText (editor: IEditor) =
     let n = editor.Count
     let lines = Array.zeroCreate n
     for i in 0 .. n - 1 do
-        lines.[i] <- editor.[i].Text
+        lines[i] <- editor[i].Text
     SourceText.ofLines lines
 
 let check (editor: IEditor) =
     use progress = new Progress "Checking..."
 
-    let config = editor.MyConfig ()
+    let config = editor.MyConfig()
     let file = editor.FileName
     let text = sourceText editor
 
@@ -54,13 +56,12 @@ let check (editor: IEditor) =
         Checker.check file text config
         |> Async.RunSynchronously
 
-    let errors = check.CheckResults.Errors
+    let errors = check.CheckResults.Diagnostics
 
-    progress.Done ()
+    progress.Done()
 
     if errors.Length = 0 then
         editor.MyErrors <- None
-        far.Message ("No errors", "F#")
     else
         editor.MyErrors <- Some errors
         showErrors editor
@@ -69,48 +70,48 @@ let tips (editor: IEditor) =
     use progress = new Progress "Getting tips..."
 
     let caret = editor.Caret
-    let lineStr = editor.[caret.Y].Text
+    let lineStr = editor[caret.Y].Text
 
     match Parser.findLongIdents caret.X lineStr with
     | None -> ()
     | Some (column, idents) ->
 
-    let config = editor.MyConfig ()
+    let config = editor.MyConfig()
     let file = editor.FileName
     let text = sourceText editor
 
     let tip =
         async {
             let! check = Checker.check file text config
-            return! check.CheckResults.GetToolTipText (caret.Y + 1, column + 1, lineStr, idents, FSharpTokenTag.Identifier)
+            return check.CheckResults.GetToolTip(caret.Y + 1, column + 1, lineStr, idents, FSharpTokenTag.Identifier)
         }
         |> Async.RunSynchronously
 
-    progress.Done ()
+    progress.Done()
 
-    showTempText (Tips.format tip true) (String.Join (".", List.toArray idents))
+    showTempText (Tips.format tip true) (String.Join(".", List.toArray idents))
 
 let usesInFile (editor: IEditor) =
     use progress = new Progress "Getting uses..."
 
     let caret = editor.Caret
-    let lineStr = editor.[caret.Y].Text
+    let lineStr = editor[caret.Y].Text
 
     match Parser.findLongIdents caret.X lineStr with
     | None -> ()
     | Some (col, identIsland) ->
 
-    let config = editor.MyConfig ()
+    let config = editor.MyConfig()
     let file = editor.FileName
     let text = sourceText editor
 
     async {
         let! check = Checker.check file text config
-        match! check.CheckResults.GetSymbolUseAtLocation (caret.Y + 1, col + 1, lineStr, identIsland) with
+        match check.CheckResults.GetSymbolUseAtLocation(caret.Y + 1, col + 1, lineStr, identIsland) with
         | None ->
             return None
         | Some symboluse ->
-            let! uses = check.CheckResults.GetUsesOfSymbolInFile symboluse.Symbol
+            let uses = check.CheckResults.GetUsesOfSymbolInFile symboluse.Symbol
             return Some uses
     }
     |> Async.RunSynchronously
@@ -118,18 +119,18 @@ let usesInFile (editor: IEditor) =
     | None -> ()
     | Some uses ->
 
-    progress.Done ()
+    progress.Done()
 
-    let menu = far.CreateListMenu (Title = "F# uses", ShowAmpersands = true, UsualMargins = true, IncrementalOptions = PatternOptions.Substring)
+    let menu = far.CreateListMenu(Title = "F# uses", ShowAmpersands = true, UsualMargins = true, IncrementalOptions = PatternOptions.Substring)
 
     let strUseLine (x: FSharpSymbolUse) =
-        let range = x.RangeAlternate
-        sprintf "%s(%d,%d): %s" (Path.GetFileName x.FileName) range.StartLine (range.StartColumn + 1) editor.[range.StartLine - 1].Text
+        let range = x.Range
+        $"{Path.GetFileName x.FileName}({range.StartLine},{range.StartColumn + 1}): {editor[range.StartLine - 1].Text}"
 
     uses |> menu.ShowItems strUseLine (fun x ->
-        let range = x.RangeAlternate
-        editor.GoTo (range.StartColumn, range.StartLine - 1)
-        editor.Redraw ()
+        let range = x.Range
+        editor.GoTo(range.StartColumn, range.StartLine - 1)
+        editor.Redraw()
     )
 
 let usesInProject (editor: IEditor) =
@@ -138,25 +139,25 @@ let usesInProject (editor: IEditor) =
     editor.Save()
 
     let caret = editor.Caret
-    let lineStr = editor.[caret.Y].Text
+    let lineStr = editor[caret.Y].Text
 
     match Parser.findLongIdents caret.X lineStr with
     | None -> ()
     | Some (col, identIsland) ->
 
-    let config = editor.MyConfig ()
+    let config = editor.MyConfig()
     let file = editor.FileName
     let text = sourceText editor
 
     async {
         let! check = Checker.check file text config
-        match! check.CheckResults.GetSymbolUseAtLocation (caret.Y + 1, col + 1, lineStr, identIsland) with
+        match check.CheckResults.GetSymbolUseAtLocation(caret.Y + 1, col + 1, lineStr, identIsland) with
         | None ->
             return None
         | Some sym ->
             let! pr = check.Checker.ParseAndCheckProject check.Options
-            let! uses = pr.GetUsesOfSymbol sym.Symbol
-            return Some (uses, sym)
+            let uses = pr.GetUsesOfSymbol sym.Symbol
+            return Some(uses, sym)
     }
     |> Async.RunSynchronously
     |> function
@@ -170,23 +171,48 @@ let usesInProject (editor: IEditor) =
         |> Array.map (fun file -> file, File.ReadAllLines file)
         |> Map.ofArray
 
-    use writer = new StringWriter ()
+    use writer = new StringWriter()
     for x in uses do
-        let lines = fileLines.[x.FileName]
-        let range = x.RangeAlternate
-        fprintfn writer "%s(%d,%d): %s" x.FileName range.StartLine (range.StartColumn + 1) lines.[range.StartLine - 1]
+        let lines = fileLines[x.FileName]
+        let range = x.Range
+        fprintfn writer "%s(%d,%d): %s" x.FileName range.StartLine (range.StartColumn + 1) lines[range.StartLine - 1]
 
-    progress.Done ()
-    
-    showTempText (writer.ToString ()) ("F# Uses " + sym.Symbol.FullName)
+    progress.Done()
+
+    showTempText (writer.ToString()) ("F# Uses " + sym.Symbol.FullName)
 
 let toggleAutoTips (editor: IEditor) =
-    editor.MyAutoTips <- not editor.MyAutoTips
+    let workings = Workings.Default.GetData()
+    workings.AutoTips <- not workings.AutoTips
+    Workings.Default.Save()
 
 let toggleAutoCheck (editor: IEditor) =
-    editor.MyAutoCheck <- not editor.MyAutoCheck
+    // toggle flag
+    let workings = Workings.Default.GetData()
+    let isAutoCheck = not workings.AutoCheck
+    workings.AutoCheck <- isAutoCheck
+    Workings.Default.Save()
 
-// https://fsharp.github.io/FSharp.Compiler.Service/editor.html#Getting-auto-complete-lists
+    // check or drop errors
+    if isAutoCheck then
+        check editor
+    else
+        editor.MyErrors <- None
+
+let fixComplete (word: string) words (ident: PartialLongName) =
+    if Array.isEmpty words && ident.LastDotPos.IsNone && "__SOURCE_DIRECTORY__".StartsWith word && word.Length > 0 then
+        [| "__SOURCE_DIRECTORY__" |]
+    else
+        // amend non-standard identifiers
+        for i in 0 .. words.Length - 1 do
+            let word = words[i]
+            //_211111_g4 case of already quioted, e.g. ``aa-1``
+            if isIdentStr word || word.StartsWith("``") && word.EndsWith("``") then
+                ()
+            else
+                words[i] <- "``" + word + "``"
+        words
+
 // old EditorTests.fs(265) they use [], "" instead of names, so do we.
 // new Use FsAutoComplete way.
 let complete (editor: IEditor) =
@@ -194,16 +220,16 @@ let complete (editor: IEditor) =
 
     // skip out of text
     let caret = editor.Caret
-    let line = editor.[caret.Y]
+    let line = editor[caret.Y]
     if caret.X = 0 || caret.X > line.Length then false
     else
 
     // skip no solid base
-    //TODO complete parameters -- x (y, [Tab] -- https://fsharp.github.io/FSharp.Compiler.Service/editor.html#Getting-parameter-information
+    //TODO complete parameters -- x (y, [Tab]
     let lineStr = line.Text
-    if Char.IsWhiteSpace lineStr.[caret.X - 1] then false
+    if Char.IsWhiteSpace lineStr[caret.X - 1] then false
     else
-    let config = editor.MyConfig ()
+    let config = editor.MyConfig()
     let file = editor.FileName
     let text = sourceText editor
 
@@ -222,20 +248,22 @@ let complete (editor: IEditor) =
     let decs =
         async {
             let! check = Checker.check file text config
-            return! check.CheckResults.GetDeclarationListInfo (Some check.ParseResults, caret.Y + 1, lineStr, ident, always [])
+            return check.CheckResults.GetDeclarationListInfo(Some check.ParseResults, caret.Y + 1, lineStr, ident, always [])
         }
         |> Async.RunSynchronously
 
     let completions =
         decs.Items
-        |> Seq.map (fun item -> item.Name) //?? mind NameInCode
-        |> Seq.filter (fun name -> name.StartsWith (if partialIdent.StartsWith "``" then partialIdent.Substring 2 else partialIdent))
-        |> Seq.sort
+        |> Array.map (fun item -> item.NameInList)
+        |> Array.filter (fun name -> name.StartsWith(if partialIdent.StartsWith "``" then partialIdent.Substring 2 else partialIdent))
+        |> Array.sort
 
-    progress.Done ()
+    progress.Done()
+
+    let completions = fixComplete partialIdent completions ident
 
     completeLine editor.Line (caret.X - partialIdent.Length) partialIdent.Length completions
-    editor.Redraw ()
+    editor.Redraw()
     true
 
 let completeBy (editor: IEditor) getCompletions =
@@ -246,34 +274,15 @@ let completeBy (editor: IEditor) getCompletions =
 
     // skip no solid base
     let lineStr = line.Text
-    if Char.IsWhiteSpace lineStr.[caret - 1] then false else
+    if Char.IsWhiteSpace lineStr[caret - 1] then false else
 
     // parse, skip none
-    let ident = QuickParse.GetPartialLongNameEx(lineStr, caret - 1)
-    let name = Parser.longIdent ident.QualifyingIdents ident.PartialIdent
-    if name.Length = 0 then false else
+    match Parser.tryCompletions lineStr caret getCompletions with
+    | None -> false
+    | Some (name, replacementIndex, ident, completions) ->
 
-    let name, replacementIndex =
-        if lineStr.[caret - 1] = '.' then
-            name + ".", caret
-        else
-            match ident.LastDotPos with
-            | Some pos ->
-                name, pos + 1
-            | None ->
-                name, caret - name.Length
-
-    //_161108_054202
-    let name = name.Replace ("``", "")
-    
-    // distinct: Sys[Tab] -> several "System"
-    // sort: System.[Tab] -> unsorted
-    let completions =
-        getCompletions name
-        |> Seq.distinct
-        |> Seq.sort
-        |> Seq.toArray
+    let completions = fixComplete name completions ident
 
     completeLine line replacementIndex (caret - replacementIndex) completions
-    editor.Redraw ()
+    editor.Redraw()
     true

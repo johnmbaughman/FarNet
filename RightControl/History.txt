@@ -1,8 +1,58 @@
+https://www.nuget.org/packages/FarNet.RightControl
 
-NuGet package: https://www.nuget.org/packages/FarNet.RightControl
-Far Manager 3.0.3872+
-Plugin FarNet 5.0.49
-RightControl.macro.lua
+= 5.1.0 =
+
+Commands "go-to-smart-home" and "select-to-smart-home" may be used in command lines
+with prefixes. See RightControl.macro.lua
+
+= 5.0.0 =
+
+Requires FarNet 8
+
+= 4.0.1 =
+
+master -> main, update links.
+
+= 4.0.0 =
+
+Requires FarNet 7, uses .NET 7.
+
+= 3.0.1 =
+
+Use latest FarNet.
+
+= 3.0.0 =
+
+Requires FarNet 6, uses .NET 6.
+
+= 2.4.1 =
+
+Use netstandard2.0
+
+= 2.4.0 =
+
+Requires FarNet 5.6.0.
+Uses new XML settings.
+Remove old %FARPROFILE%\FarNet\RightControl\Settings.resources
+See also: https://github.com/nightroman/FarNet/wiki/Zoo#retired-farnetsettings
+
+Regex settings:
+White spaces are not ignored automatically, use (?x:) explicitly.
+
+= 2.3.1 =
+
+Maintenance.
+
+= 2.3.0 =
+
+Use FarNet 5.5.1 (changes in settings saving).
+
+Replaced the setting Regex with two RegexLeft and RegexRight.
+This way is more flexible and expressions may be simpler.
+
+= 2.2.2 =
+
+Minor tweaks.
 
 = 2.2.1 =
 

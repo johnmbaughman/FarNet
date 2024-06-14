@@ -5,42 +5,44 @@
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
 
-namespace PowerShellFar.Commands
+namespace PowerShellFar.Commands;
+
+/// <summary>
+/// PowerShellFar cmdlet.
+/// </summary>
+class BaseCmdlet : PSCmdlet
 {
+	const string Help = "PowerShellFar.dll-Help.xml";
+
 	/// <summary>
-	/// PowerShellFar base cmdlet.
+	/// Adds cmdlets to the initial state.
 	/// </summary>
-	class BaseCmdlet : PSCmdlet
+	internal static void AddCmdlets(InitialSessionState state)
 	{
-		const string Help = "PowerShellFar.dll-Help.xml";
-		/// <summary>
-		/// Adds cmdlets to the initial state.
-		/// </summary>
-		internal static void AddCmdlets(InitialSessionState state)
+		state.Commands.Add(new SessionStateCmdletEntry[]
 		{
-			state.Commands.Add(new SessionStateCmdletEntry[] {
-				new SessionStateCmdletEntry(AssertFarCommand.MyName, typeof(Commands.AssertFarCommand), Help),
-				new SessionStateCmdletEntry("Find-FarFile", typeof(Commands.FindFarFileCommand), Help),
-				new SessionStateCmdletEntry("Get-FarFile", typeof(Commands.GetFarFileCommand), Help),
-				new SessionStateCmdletEntry("Get-FarItem", typeof(Commands.GetFarItemCommand), Help),
-				new SessionStateCmdletEntry("Get-FarPath", typeof(Commands.GetFarPathCommand), Help),
-				new SessionStateCmdletEntry("Invoke-Far", typeof(Commands.InvokeFarCommand), Help),
-				new SessionStateCmdletEntry("Invoke-FarStepper", typeof(Commands.InvokeFarStepperCommand), Help),
-				new SessionStateCmdletEntry("New-FarEditor", typeof(Commands.NewFarEditorCommand), Help),
-				new SessionStateCmdletEntry("New-FarFile", typeof(Commands.NewFarFileCommand), Help),
-				new SessionStateCmdletEntry("New-FarItem", typeof(Commands.NewFarItemCommand), Help),
-				new SessionStateCmdletEntry("New-FarList", typeof(Commands.NewFarListCommand), Help),
-				new SessionStateCmdletEntry("New-FarMenu", typeof(Commands.NewFarMenuCommand), Help),
-				new SessionStateCmdletEntry("New-FarViewer", typeof(Commands.NewFarViewerCommand), Help),
-				new SessionStateCmdletEntry("Open-FarEditor", typeof(Commands.OpenFarEditorCommand), Help),
-				new SessionStateCmdletEntry("Open-FarPanel", typeof(Commands.OpenFarPanelCommand), Help),
-				new SessionStateCmdletEntry("Open-FarViewer", typeof(Commands.OpenFarViewerCommand), Help),
-				new SessionStateCmdletEntry("Out-FarList", typeof(Commands.OutFarListCommand), Help),
-				new SessionStateCmdletEntry("Out-FarPanel", typeof(Commands.OutFarPanelCommand), Help),
-				new SessionStateCmdletEntry("Search-FarFile", typeof(Commands.SearchFarFileCommand), Help),
-				new SessionStateCmdletEntry("Show-FarMessage", typeof(Commands.ShowFarMessageCommand), Help),
-				new SessionStateCmdletEntry("Start-FarJob", typeof(Commands.StartFarJobCommand), Help)
-			});
-		}
+			new(AssertFarCommand.MyName, typeof(AssertFarCommand), Help),
+			new("Find-FarFile", typeof(FindFarFileCommand), Help),
+			new("Get-FarItem", typeof(GetFarItemCommand), Help),
+			new("Get-FarPath", typeof(GetFarPathCommand), Help),
+			new("New-FarEditor", typeof(NewFarEditorCommand), Help),
+			new("New-FarFile", typeof(NewFarFileCommand), Help),
+			new("New-FarItem", typeof(NewFarItemCommand), Help),
+			new("New-FarList", typeof(NewFarListCommand), Help),
+			new("New-FarMenu", typeof(NewFarMenuCommand), Help),
+			new("New-FarViewer", typeof(NewFarViewerCommand), Help),
+			new("Open-FarEditor", typeof(OpenFarEditorCommand), Help),
+			new("Open-FarPanel", typeof(OpenFarPanelCommand), Help),
+			new("Open-FarViewer", typeof(OpenFarViewerCommand), Help),
+			new("Out-FarList", typeof(OutFarListCommand), Help),
+			new("Out-FarPanel", typeof(OutFarPanelCommand), Help),
+			new("Register-FarCommand", typeof(RegisterFarCommandCommand), Help),
+			new("Register-FarDrawer", typeof(RegisterFarDrawerCommand), Help),
+			new("Register-FarTool", typeof(RegisterFarToolCommand), Help),
+			new("Search-FarFile", typeof(SearchFarFileCommand), Help),
+			new("Show-FarMessage", typeof(ShowFarMessageCommand), Help),
+			new("Start-FarJob", typeof(StartFarJobCommand), Help),
+			new("Start-FarTask", typeof(StartFarTaskCommand), Help),
+		});
 	}
 }

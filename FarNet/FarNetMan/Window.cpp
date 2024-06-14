@@ -1,8 +1,6 @@
 
-/*
-FarNet plugin for Far Manager
-Copyright (c) 2006-2016 Roman Kuzmin
-*/
+// FarNet plugin for Far Manager
+// Copyright (c) Roman Kuzmin
 
 #include "StdAfx.h"
 #include "Window.h"
@@ -10,6 +8,14 @@ Copyright (c) 2006-2016 Roman Kuzmin
 
 namespace FarNet
 {;
+IntPtr Window::GetIdAt(int index)
+{
+	WindowInfo wi;
+	Call_ACTL_GETWINDOWINFO(wi, index);
+
+	return (IntPtr)wi.Id;
+}
+
 WindowKind Window::GetKindAt(int index)
 {
 	WindowInfo wi;

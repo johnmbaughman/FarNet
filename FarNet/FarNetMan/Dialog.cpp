@@ -2,21 +2,28 @@
 // FarNet plugin for Far Manager
 // Copyright (c) Roman Kuzmin
 
-#include "StdAfx.h"
+#include "stdafx.h"
 #include "Dialog.h"
 #include "DialogControls.h"
 #include "Wrappers.h"
 
 namespace FarNet
-{;
+{
 // Dialog callback dispatches the event to the specified dialog
 INT_PTR WINAPI FarDialogProc(HANDLE hDlg, intptr_t msg, intptr_t param1, void* param2)
 {
-	for each(FarDialog^ dialog in FarDialog::_dialogs)
+	for (int i = FarDialog::_dialogs.Count; --i >= 0;)
 	{
+		auto dialog = FarDialog::_dialogs[i];
+		if (dialog->_hDlg == INVALID_HANDLE_VALUE)
+		{
+			dialog->_hDlg = hDlg;
+			return dialog->DialogProc(msg, param1, param2);
+		}
 		if (dialog->_hDlg == hDlg)
 			return dialog->DialogProc(msg, param1, param2);
 	}
+
 	return Info.DefDlgProc(hDlg, msg, param1, param2);
 }
 
@@ -29,14 +36,14 @@ DEF_PROP_FLAG(FarDialog, NoShadow, FDLG_NODRAWSHADOW);
 
 // Native dialog wrapper
 FarDialog::FarDialog(HANDLE hDlg)
-: _hDlg(hDlg)
+	: _hDlg(hDlg)
 {}
 
 // FarNet dialog host
 FarDialog::FarDialog(int left, int top, int right, int bottom)
-: _hDlg(INVALID_HANDLE_VALUE)
-, _rect(left, top, right, bottom)
-, _items(gcnew List<FarControl^>)
+	: _hDlg(INVALID_HANDLE_VALUE)
+	, _rect(left, top, right, bottom)
+	, _items(gcnew List<FarControl^>)
 {
 	if (left < 0 || top < 0)
 	{
@@ -62,6 +69,11 @@ IControl^ FarDialog::Default::get()
 void FarDialog::Default::set(IControl^ value)
 {
 	_default = (FarControl^)value;
+}
+
+IntPtr FarDialog::Id::get()
+{
+	return (IntPtr)_hDlg;
 }
 
 IControl^ FarDialog::Focused::get()
@@ -98,7 +110,7 @@ Place FarDialog::Rect::get()
 		return _rect;
 
 	SMALL_RECT arg;
-    Info.SendDlgMessage(_hDlg, DM_GETDLGRECT, 0, &arg);
+	Info.SendDlgMessage(_hDlg, DM_GETDLGRECT, 0, &arg);
 	return Place(arg.Left, arg.Top, arg.Right, arg.Bottom);
 }
 
@@ -128,7 +140,7 @@ Guid FarDialog::TypeId::get()
 		return _typeId;
 
 	// request
-	DialogInfo arg = {sizeof(DialogInfo)};
+	DialogInfo arg = { sizeof(DialogInfo) };
 	if (Info.SendDlgMessage(_hDlg, DM_GETDIALOGINFO, 0, &arg))
 	{
 		// get and save it to reuse
@@ -270,7 +282,7 @@ void FarDialog::Open()
 		_NoModal = false;
 	else
 		_NoModal = true;
-	
+
 	Show();
 }
 
@@ -282,10 +294,11 @@ bool FarDialog::Show()
 		_flags &= ~FDLG_NONMODAL;
 
 	_farItems = new FarDialogItem[_items->Count];
+	bool toFree = false;
 	try
 	{
 		// setup items
-		for(int i = _items->Count; --i >= 0;)
+		for (int i = _items->Count; --i >= 0;)
 			_items[i]->Starting(_farItems[i]);
 
 		// set default
@@ -305,7 +318,11 @@ bool FarDialog::Show()
 		}
 
 		// help
-		PIN_NE(pinHelpTopic, HelpTopic);
+		if (HelpTopic)
+			_helpTopic = NewChars(HelpTopic);
+
+		//! register before init
+		_dialogs.Add(this);
 
 		// init
 		GUID typeId = ToGUID(_typeId);
@@ -316,7 +333,7 @@ bool FarDialog::Show()
 			_rect.Top,
 			_rect.Right,
 			_rect.Bottom,
-			pinHelpTopic,
+			_helpTopic,
 			_farItems,
 			_items->Count,
 			0,
@@ -325,10 +342,11 @@ bool FarDialog::Show()
 			nullptr);
 
 		if (_hDlg == INVALID_HANDLE_VALUE)
+		{
+			//! unregister
+			_dialogs.Remove(this);
 			throw gcnew InvalidOperationException("Cannot create dialog.");
-
-		// register
-		_dialogs.Add(this);
+		}
 
 		if (_NoModal)
 			return false;
@@ -339,11 +357,32 @@ bool FarDialog::Show()
 		// stop
 		return Stop(selected);
 	}
+	catch (Exception^)
+	{
+		toFree = true;
+		throw;
+	}
 	finally
 	{
-		if (!_NoModal)
+		if (toFree || !_NoModal)
+		{
 			Free();
+		}
 	}
+}
+
+// called from the timer thread //_210630_i0
+void FarDialog::OnTimer(Object^)
+{
+	if (_Timer && _timerInstance && _hDlg != INVALID_HANDLE_VALUE)
+		Far::Api->PostJob(gcnew Action(this, &FarDialog::OnTimerJob));
+}
+
+// called from the main thread //_210630_i0
+void FarDialog::OnTimerJob()
+{
+	if (_Timer && _timerInstance && _hDlg != INVALID_HANDLE_VALUE)
+		_Timer(this, nullptr);
 }
 
 bool FarDialog::Stop(int selected)
@@ -379,14 +418,18 @@ void FarDialog::Free()
 	delete[] _farItems;
 	_farItems = nullptr;
 
+	// help
+	delete _helpTopic;
+	_helpTopic = nullptr;
+
 	// unregister
 	_dialogs.Remove(this);
 }
 
-void FarDialog::Close()
+void FarDialog::Close(int id)
 {
 	if (_hDlg != INVALID_HANDLE_VALUE)
-		Info.SendDlgMessage(_hDlg, DM_CLOSE, -1, 0);
+		Info.SendDlgMessage(_hDlg, DM_CLOSE, id, 0);
 }
 
 void FarDialog::Redraw()
@@ -407,7 +450,7 @@ void FarDialog::EnableRedraw()
 
 FarDialog^ FarDialog::GetDialog()
 {
-	for(int i = Far::Api->Window->Count; --i >= 0;)
+	for (int i = Far::Api->Window->Count; --i >= 0;)
 	{
 		WindowInfo wi;
 		Call_ACTL_GETWINDOWINFO(wi, i);
@@ -422,7 +465,7 @@ FarDialog^ FarDialog::GetDialog()
 			continue;
 
 		HANDLE hDlg = (HANDLE)wi.Id;
-		for each(FarDialog^ dialog in FarDialog::_dialogs)
+		for each (FarDialog ^ dialog in FarDialog::_dialogs)
 		{
 			if (dialog->_hDlg == hDlg)
 				return dialog;
@@ -451,7 +494,7 @@ IControl^ FarDialog::default::get(int id)
 	if (!Info.SendDlgMessage(_hDlg, DM_GETDLGITEMSHORT, id, &di))
 		return nullptr;
 
-	switch(di.Type)
+	switch (di.Type)
 	{
 	case DI_BUTTON:
 		return gcnew FarButton(this, id);
@@ -529,306 +572,335 @@ INT_PTR FarDialog::DialogProc(intptr_t msg, intptr_t param1, void* param2)
 	try
 	{
 		// message:
-		switch(msg)
+		switch (msg)
 		{
 		case DN_INITDIALOG:
-			{
-				// setup items
-				for each(FarControl^ fc in _items)
-					fc->Started();
+		{
+			// setup items
+			for each (FarControl ^ fc in _items)
+				fc->Started();
 
-				if (_Initialized)
-				{
-					InitializedEventArgs ea(param1 < 0 ? nullptr : _items[(int)param1]);
-					_Initialized(this, %ea);
-					return !ea.Ignore;
-				}
-				break;
-			}
-		case DN_CLOSE:
+			if (_Initialized)
 			{
-				int selected = (int)param1;
-				FarControl^ fc = selected >= 0 ? _items[selected] : nullptr;
+				InitializedEventArgs ea(param1 < 0 ? nullptr : _items[(int)param1]);
+				_Initialized(this, % ea);
+			}
+
+			// start timer //_210630_i0
+			if (_TimerInterval > 0)
+				_timerInstance = gcnew System::Threading::Timer(gcnew TimerCallback(this, &FarDialog::OnTimer), this, _TimerInterval, _TimerInterval);
+
+			//! do not use .Ignore and just return default, @Shmuel
+			//! https://forum.farmanager.com/viewtopic.php?t=12755
+			break;
+		}
+		case DN_CLOSE:
+		{
+			bool toFree = true;
+			int selected = (int)param1;
+			FarControl^ fc = selected >= 0 ? _items[selected] : nullptr;
+			try
+			{
+				// call event
 				if (_Closing)
 				{
 					ClosingEventArgs ea(fc);
-					_Closing(this, %ea);
+					_Closing(this, % ea);
 					if (ea.Ignore)
+					{
+						toFree = false;
 						return false;
+					}
 				}
-				if (_NoModal)
+
+				// stop timer //_210630_i0
+				if (_timerInstance)
+				{
+					delete _timerInstance;
+					_timerInstance = nullptr;
+				}
+
+				// call event
+				if (_Closed)
+				{
+					AnyEventArgs ea(fc);
+					_Closed(this, % ea);
+				}
+			}
+			finally
+			{
+				if (_NoModal && toFree)
 				{
 					Stop(selected);
 					Free();
 				}
-				return true;
 			}
+			return true;
+		}
 		case DN_DRAWDLGITEM:
+		{
+			FarControl^ fc = _items[(int)param1];
+			if (fc->_Drawing)
 			{
-				FarControl^ fc = _items[(int)param1];
-				if (fc->_Drawing)
+				DrawingEventArgs ea(fc);
+				fc->_Drawing(this, % ea);
+				return !ea.Ignore;
+			}
+			return 1;
+		}
+		case DN_DRAWDLGITEMDONE:
+		{
+			FarControl^ fc = _items[(int)param1];
+			if (fc->_Drawn)
+			{
+				DrawnEventArgs ea(fc);
+				fc->_Drawn(this, % ea);
+			}
+			return 1;
+		}
+		case DN_CTLCOLORDLGITEM:
+		{
+			FarControl^ fc = _items[(int)param1];
+			if (fc->_Coloring)
+			{
+				ColoringEventArgs ea(fc);
+				FarDialogItemColors& arg = *(FarDialogItemColors*)param2;
+
+				ea.Foreground1 = ConsoleColor(arg.Colors[0].ForegroundColor & 0xFF);
+				ea.Background1 = ConsoleColor(arg.Colors[0].BackgroundColor & 0xFF);
+				ea.Foreground2 = ConsoleColor(arg.Colors[1].ForegroundColor & 0xFF);
+				ea.Background2 = ConsoleColor(arg.Colors[1].BackgroundColor & 0xFF);
+				ea.Foreground3 = ConsoleColor(arg.Colors[2].ForegroundColor & 0xFF);
+				ea.Background3 = ConsoleColor(arg.Colors[2].BackgroundColor & 0xFF);
+				ea.Foreground4 = ConsoleColor(arg.Colors[3].ForegroundColor & 0xFF);
+				ea.Background4 = ConsoleColor(arg.Colors[3].BackgroundColor & 0xFF);
+
+				fc->_Coloring(this, % ea);
+
+				arg.Colors[0].ForegroundColor = 0xFF000000 | COLORREF(ea.Foreground1);
+				arg.Colors[0].BackgroundColor = 0xFF000000 | COLORREF(ea.Background1);
+				arg.Colors[1].ForegroundColor = 0xFF000000 | COLORREF(ea.Foreground2);
+				arg.Colors[1].BackgroundColor = 0xFF000000 | COLORREF(ea.Background2);
+				arg.Colors[2].ForegroundColor = 0xFF000000 | COLORREF(ea.Foreground3);
+				arg.Colors[2].BackgroundColor = 0xFF000000 | COLORREF(ea.Background3);
+				arg.Colors[3].ForegroundColor = 0xFF000000 | COLORREF(ea.Foreground4);
+				arg.Colors[3].BackgroundColor = 0xFF000000 | COLORREF(ea.Background4);
+
+				return 1;
+			}
+			break;
+		}
+		case DN_GOTFOCUS:
+		{
+			int index = (int)param1;
+			if (index == -1)
+			{
+				if (_GotFocus)
 				{
-					DrawingEventArgs ea(fc);
-					fc->_Drawing(this, %ea);
+					_GotFocus(this, nullptr);
+				}
+			}
+			else
+			{
+				FarControl^ fc = _items[index];
+				if (fc->_GotFocus)
+				{
+					AnyEventArgs ea(fc);
+					fc->_GotFocus(this, % ea);
+				}
+			}
+			return 0;
+		}
+		case DN_KILLFOCUS:
+		{
+			int index = (int)param1;
+			if (index == -1)
+			{
+				if (_LosingFocus)
+				{
+					_LosingFocus(this, nullptr);
+				}
+			}
+			else
+			{
+				FarControl^ fc = _items[index];
+				if (fc->_LosingFocus)
+				{
+					LosingFocusEventArgs ea(fc);
+					fc->_LosingFocus(this, % ea);
+					if (ea.Focused)
+						return ea.Focused->Id;
+				}
+			}
+			return -1;
+		}
+		case DN_BTNCLICK:
+		{
+			FarControl^ fc = _items[(int)param1];
+			FarButton^ fb = dynamic_cast<FarButton^>(fc);
+			if (fb)
+			{
+				if (fb->_ButtonClicked)
+				{
+					ButtonClickedEventArgs ea(fb, 0);
+					fb->_ButtonClicked(this, % ea);
+					return ea.Ignore;
+				}
+				break;
+			}
+			FarCheckBox^ cb = dynamic_cast<FarCheckBox^>(fc);
+			if (cb)
+			{
+				if (cb->_ButtonClicked)
+				{
+					ButtonClickedEventArgs ea(cb, (int)(__int64)param2);
+					cb->_ButtonClicked(this, % ea);
 					return !ea.Ignore;
 				}
-				return 1;
+				break;
 			}
-		case DN_DRAWDLGITEMDONE:
+			FarRadioButton^ rb = dynamic_cast<FarRadioButton^>(fc);
+			if (rb)
 			{
-				FarControl^ fc = _items[(int)param1];
-				if (fc->_Drawn)
+				if (rb->_ButtonClicked)
 				{
-					DrawnEventArgs ea(fc);
-					fc->_Drawn(this, %ea);
-				}
-				return 1;
-			}
-		case DN_CTLCOLORDLGITEM:
-			{
-				FarControl^ fc = _items[(int)param1];
-				if (fc->_Coloring)
-				{
-					ColoringEventArgs ea(fc);
-					FarDialogItemColors& arg = *(FarDialogItemColors*)param2;
-
-					ea.Foreground1 = ConsoleColor(arg.Colors[0].ForegroundColor);
-					ea.Background1 = ConsoleColor(arg.Colors[0].BackgroundColor);
-					ea.Foreground2 = ConsoleColor(arg.Colors[1].ForegroundColor);
-					ea.Background2 = ConsoleColor(arg.Colors[1].BackgroundColor);
-					ea.Foreground3 = ConsoleColor(arg.Colors[2].ForegroundColor);
-					ea.Background3 = ConsoleColor(arg.Colors[2].BackgroundColor);
-					ea.Foreground4 = ConsoleColor(arg.Colors[3].ForegroundColor);
-					ea.Background4 = ConsoleColor(arg.Colors[3].BackgroundColor);
-
-					fc->_Coloring(this, %ea);
-
-					arg.Colors[0].ForegroundColor = COLORREF(ea.Foreground1);
-					arg.Colors[0].BackgroundColor = COLORREF(ea.Background1);
-					arg.Colors[1].ForegroundColor = COLORREF(ea.Foreground2);
-					arg.Colors[1].BackgroundColor = COLORREF(ea.Background2);
-					arg.Colors[2].ForegroundColor = COLORREF(ea.Foreground3);
-					arg.Colors[2].BackgroundColor = COLORREF(ea.Background3);
-					arg.Colors[3].ForegroundColor = COLORREF(ea.Foreground4);
-					arg.Colors[3].BackgroundColor = COLORREF(ea.Background4);
-
-					return 1;
+					ButtonClickedEventArgs ea(rb, (int)(__int64)param2);
+					rb->_ButtonClicked(this, % ea);
+					return !ea.Ignore;
 				}
 				break;
 			}
-		case DN_GOTFOCUS:
-			{
-				int index = (int)param1;
-				if (index == -1)
-				{
-					if (_GotFocus)
-					{
-						_GotFocus(this, nullptr);
-					}
-				}
-				else
-				{
-					FarControl^ fc = _items[index];
-					if (fc->_GotFocus)
-					{
-						AnyEventArgs ea(fc);
-						fc->_GotFocus(this, %ea);
-					}
-				}
-				return 0;
-			}
-		case DN_KILLFOCUS:
-			{
-				int index = (int)param1;
-				if (index == -1)
-				{
-					if (_LosingFocus)
-					{
-						_LosingFocus(this, nullptr);
-					}
-				}
-				else
-				{
-					FarControl^ fc = _items[index];
-					if (fc->_LosingFocus)
-					{
-						LosingFocusEventArgs ea(fc);
-						fc->_LosingFocus(this, %ea);
-						if (ea.Focused)
-							return ea.Focused->Id;
-					}
-				}
-				return -1;
-			}
-		case DN_BTNCLICK:
-			{
-				FarControl^ fc = _items[(int)param1];
-				FarButton^ fb = dynamic_cast<FarButton^>(fc);
-				if (fb)
-				{
-					if (fb->_ButtonClicked)
-					{
-						ButtonClickedEventArgs ea(fb, 0);
-						fb->_ButtonClicked(this, %ea);
-						return ea.Ignore;
-					}
-					break;
-				}
-				FarCheckBox^ cb = dynamic_cast<FarCheckBox^>(fc);
-				if (cb)
-				{
-					if (cb->_ButtonClicked)
-					{
-						ButtonClickedEventArgs ea(cb, (int)(__int64)param2);
-						cb->_ButtonClicked(this, %ea);
-						return !ea.Ignore;
-					}
-					break;
-				}
-				FarRadioButton^ rb = dynamic_cast<FarRadioButton^>(fc);
-				if (rb)
-				{
-					if (rb->_ButtonClicked)
-					{
-						ButtonClickedEventArgs ea(rb, (int)(__int64)param2);
-						rb->_ButtonClicked(this, %ea);
-						return !ea.Ignore;
-					}
-					break;
-				}
-				break;
-			}
+			break;
+		}
 		case DN_EDITCHANGE:
+		{
+			FarControl^ fc = _items[(int)param1];
+			FarEdit^ fe = dynamic_cast<FarEdit^>(fc);
+			if (fe)
 			{
-				FarControl^ fc = _items[(int)param1];
-				FarEdit^ fe = dynamic_cast<FarEdit^>(fc);
-				if (fe)
+				if (fe->_TextChanged)
 				{
-					if (fe->_TextChanged)
-					{
-						FarDialogItem& item = *(FarDialogItem*)param2;
-						TextChangedEventArgs ea(fe, gcnew String(item.Data));
-						fe->_TextChanged(this, %ea);
-						return !ea.Ignore;
-					}
-					break;
-				}
-				FarComboBox^ cb = dynamic_cast<FarComboBox^>(fc);
-				if (cb)
-				{
-					if (cb->_TextChanged)
-					{
-						FarDialogItem& item = *(FarDialogItem*)param2;
-						TextChangedEventArgs ea(cb, gcnew String(item.Data));
-						cb->_TextChanged(this, %ea);
-						return !ea.Ignore;
-					}
-					break;
+					FarDialogItem& item = *(FarDialogItem*)param2;
+					TextChangedEventArgs ea(fe, gcnew String(item.Data));
+					fe->_TextChanged(this, % ea);
+					return !ea.Ignore;
 				}
 				break;
 			}
-		case DN_ENTERIDLE:
+			FarComboBox^ cb = dynamic_cast<FarComboBox^>(fc);
+			if (cb)
 			{
-				if (_Idled)
+				if (cb->_TextChanged)
 				{
-					_Idled(this, nullptr);
+					FarDialogItem& item = *(FarDialogItem*)param2;
+					TextChangedEventArgs ea(cb, gcnew String(item.Data));
+					cb->_TextChanged(this, % ea);
+					return !ea.Ignore;
 				}
 				break;
 			}
+			break;
+		}
 		case DN_CONTROLINPUT:
-			{
-				FarControl^ fc = param1 >= 0 ? _items[(int)param1] : nullptr;
-				INPUT_RECORD* ir = (INPUT_RECORD*)param2;
+		{
+			FarControl^ fc = param1 >= 0 ? _items[(int)param1] : nullptr;
+			INPUT_RECORD* ir = (INPUT_RECORD*)param2;
 
-				if (MOUSE_EVENT == ir->EventType)
+			if (MOUSE_EVENT == ir->EventType)
+			{
+				if (fc && fc->_MouseClicked || _MouseClicked)
 				{
-					if (fc && fc->_MouseClicked || _MouseClicked)
+					//! get args once: if both handler work then for the second this memory may be garbage
+					MouseClickedEventArgs ea(fc, GetMouseInfo(ir->Event.MouseEvent));
+					if (fc && fc->_MouseClicked)
 					{
-						//! get args once: if both handler work then for the second this memory may be garbage
-						MouseClickedEventArgs ea(fc, GetMouseInfo(ir->Event.MouseEvent));
-						if (fc && fc->_MouseClicked)
-						{
-							fc->_MouseClicked(this, %ea);
-							if (ea.Ignore)
-								return true;
-						}
-						if (_MouseClicked)
-						{
-							//! translate user control coordinates to standard
-							if (fc && dynamic_cast<FarUserControl^>(fc) != nullptr)
-							{
-								Point pt1 = Rect.First;
-								Point pt2 = fc->Rect.First;
-								Point pt3 = ea.Mouse->Where;
-								ea.Mouse = gcnew MouseInfo(
-									Point(pt1.X + pt2.X + pt3.X, pt1.Y + pt2.Y + pt3.Y),
-									ea.Mouse->Action, ea.Mouse->Buttons, ea.Mouse->ControlKeyState, ea.Mouse->Value);
-							}
-							_MouseClicked(this, %ea);
-							if (ea.Ignore)
-								return true;
-						}
-					}
-				}
-				else if (KEY_EVENT == ir->EventType)
-				{
-					if (fc && fc->_KeyPressed)
-					{
-						KeyPressedEventArgs ea(fc, KeyInfoFromInputRecord(*ir));
-						fc->_KeyPressed(this, %ea);
+						fc->_MouseClicked(this, % ea);
 						if (ea.Ignore)
 							return true;
 					}
-					if (_KeyPressed)
+					if (_MouseClicked)
 					{
-						KeyPressedEventArgs ea(fc, KeyInfoFromInputRecord(*ir));
-						_KeyPressed(this, %ea);
+						//! translate user control coordinates to standard
+						if (fc && dynamic_cast<FarUserControl^>(fc) != nullptr)
+						{
+							Point pt1 = Rect.First;
+							Point pt2 = fc->Rect.First;
+							Point pt3 = ea.Mouse->Where;
+							ea.Mouse = gcnew MouseInfo(
+								Point(pt1.X + pt2.X + pt3.X, pt1.Y + pt2.Y + pt3.Y),
+								ea.Mouse->Action, ea.Mouse->Buttons, ea.Mouse->ControlKeyState, ea.Mouse->Value);
+						}
+						_MouseClicked(this, % ea);
 						if (ea.Ignore)
 							return true;
 					}
 				}
-				break;
 			}
+			else if (KEY_EVENT == ir->EventType)
+			{
+				if (fc && fc->_KeyPressed)
+				{
+					KeyPressedEventArgs ea(fc, KeyInfoFromInputRecord(*ir));
+					fc->_KeyPressed(this, % ea);
+					if (ea.Ignore)
+						return true;
+				}
+				if (_KeyPressed)
+				{
+					KeyPressedEventArgs ea(fc, KeyInfoFromInputRecord(*ir));
+					_KeyPressed(this, % ea);
+					if (ea.Ignore)
+						return true;
+				}
+			}
+			break;
+		}
 		case DN_RESIZECONSOLE:
+		{
+			if (_ConsoleSizeChanged)
 			{
-				if (_ConsoleSizeChanged)
-				{
-					AutoStopDialogRedraw autoStopDialogRedraw(_hDlg);
+				AutoStopDialogRedraw autoStopDialogRedraw(_hDlg);
 
-					SizeEventArgs ea(nullptr, Point(((COORD*)param2)->X, ((COORD*)param2)->Y));
-					_ConsoleSizeChanged(this, %ea);
+				SizeEventArgs ea(nullptr, Point(((COORD*)param2)->X, ((COORD*)param2)->Y));
+				_ConsoleSizeChanged(this, % ea);
 
-					return true;
-				}
-				break;
-			}
-		case DN_DROPDOWNOPENED:
-			{
-				FarControl^ fc = _items[(int)param1];
-				if (param2)
-				{
-					if (fc->_DropDownOpening)
-					{
-						DropDownOpeningEventArgs ea(fc);
-						fc->_DropDownOpening(this, %ea);
-					}
-				}
-				else
-				{
-					if (fc->_DropDownClosed)
-					{
-						DropDownClosedEventArgs ea(fc);
-						fc->_DropDownClosed(this, %ea);
-					}
-				}
 				return true;
 			}
+			break;
+		}
+		case DN_DROPDOWNOPENED:
+		{
+			FarControl^ fc = _items[(int)param1];
+			if (param2)
+			{
+				if (fc->_DropDownOpening)
+				{
+					DropDownOpeningEventArgs ea(fc);
+					fc->_DropDownOpening(this, % ea);
+				}
+			}
+			else
+			{
+				if (fc->_DropDownClosed)
+				{
+					DropDownClosedEventArgs ea(fc);
+					fc->_DropDownClosed(this, % ea);
+				}
+			}
+			return true;
+		}
 		}
 	}
-	catch(Exception^ e)
+	catch (Exception^ e)
 	{
 		Far::Api->ShowError("Error in " __FUNCTION__, e);
 	}
+
+	//_201118_vk case: exception in Closing in non-modal dialog
+	// (1) the dialog is killed -> INVALID_HANDLE_VALUE
+	// (2) return true, i.e. let it close
+	if (_hDlg == INVALID_HANDLE_VALUE)
+		return true;
 
 	// default
 	return Info.DefDlgProc(_hDlg, msg, param1, param2);

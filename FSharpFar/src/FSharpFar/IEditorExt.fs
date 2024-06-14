@@ -2,7 +2,7 @@
 module FSharpFar.IEditorExt
 open FarNet
 open System.IO
-open FSharp.Compiler.SourceCodeServices
+open FSharp.Compiler.Diagnostics
 
 module private Key =
     let config = "F# config"
@@ -14,38 +14,35 @@ module private Key =
 
 type IEditor with
     member private x.GetOpt<'T> (key) =
-        match x.Data.[key] with
+        match x.Data[key] with
         | null -> None
-        | data -> Some (data :?> 'T)
+        | data -> Some(data :?> 'T)
 
-    member private x.SetOpt (key, value) =
+    member private x.SetOpt(key, value) =
         match value with
-        | Some v -> x.Data.[key] <- v
+        | Some v -> x.Data[key] <- v
         | _ -> x.Data.Remove key
 
     member x.MySession
         with get () = x.GetOpt<Session> Key.session
-        and set (value: Session option) = x.SetOpt (Key.session, value)
+        and set (value: Session option) = x.SetOpt(Key.session, value)
 
     member x.MyErrors
-        with get () = x.GetOpt<FSharpErrorInfo []> Key.errors
-        and set (value: FSharpErrorInfo [] option) =
+        with get () = x.GetOpt<FSharpDiagnostic []> Key.errors
+        and set (value: FSharpDiagnostic [] option) =
             x.MyChecking <- false
-            x.SetOpt (Key.errors, value)
-
-    member x.MyAutoTips
-        with get () = defaultArg (x.GetOpt<bool> Key.autoTips) true
-        and set (value: bool) = x.SetOpt (Key.autoTips, Some value)
-
-    member x.MyAutoCheck
-        with get () = defaultArg (x.GetOpt<bool> Key.autoCheck) true
-        and set (value: bool) = x.SetOpt (Key.autoCheck, Some value)
+            match value with
+            | Some value ->
+                //! avoid useless and sometimes numerous dupes
+                x.Data[Key.errors] <- value |> Array.distinctBy (fun x -> x.StartLine, x.ErrorNumber, x.FileName, x.Message)
+            | None ->
+                x.Data.Remove Key.errors
 
     member x.MyChecking
         with get () = defaultArg (x.GetOpt<bool> Key.checking) false
-        and set (value: bool) = x.SetOpt (Key.checking, Some value)
+        and set (value: bool) = x.SetOpt(Key.checking, Some value)
 
-    member x.MyConfig () =
+    member x.MyConfig() =
         match x.GetOpt<Config> Key.config with
         | Some config ->
             config
@@ -56,10 +53,10 @@ type IEditor with
                     ses.Config
                 | None ->
                     Config.readForFile x.FileName
-            x.SetOpt (Key.config, Some config)
+            x.SetOpt(Key.config, Some config)
             config
 
-    member x.MyFileErrors () =
+    member x.MyFileErrors() =
         match x.MyErrors with
         | None ->
             None

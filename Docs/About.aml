@@ -1,0 +1,95 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<topic id="fc91004a-d200-4e49-b791-8c8fd70d2f5c" revisionNumber="1">
+  <developerConceptualDocument xmlns="http://ddue.schemas.microsoft.com/authoring/2003/5" xmlns:xlink="http://www.w3.org/1999/xlink">
+
+    <introduction>
+      <para>
+FarNet is the framework for Far Manager modules written in .NET languages like
+C# or F# and scripting in PowerShell (PowerShellFar module), F# (FSharpFar
+module), JavaScript (JavaScriptFar module).
+      </para>
+    </introduction>
+
+    <section>
+      <title>FarNet modules</title>
+      <content>
+        <para>
+Module projects may be created using the dotnet templates or manually.
+For the details, see the wiki page <externalLink><linkText>FarNet</linkText><linkUri>https://github.com/nightroman/FarNet/wiki/FarNet</linkUri></externalLink>.
+        </para>
+      </content>
+    </section>
+
+    <section>
+      <title>Module actions</title>
+      <content>
+        <para>
+FarNet modules implement action classes in order to run something.
+Actions are called on various user interactions and core events.
+        </para>
+        <list class="bullet">
+          <listItem>
+            <para>
+              <codeEntityReference>T:FarNet.ModuleCommand</codeEntityReference>
+            </para>
+          </listItem>
+          <listItem>
+            <para>
+              <codeEntityReference>T:FarNet.ModuleDrawer</codeEntityReference>
+            </para>
+          </listItem>
+          <listItem>
+            <para>
+              <codeEntityReference>T:FarNet.ModuleEditor</codeEntityReference>
+            </para>
+          </listItem>
+          <listItem>
+            <para>
+              <codeEntityReference>T:FarNet.ModuleTool</codeEntityReference>
+            </para>
+          </listItem>
+        </list>
+        <para>
+In addition, modules may implement one <codeEntityReference>T:FarNet.ModuleHost</codeEntityReference>.
+It is created and called when the module is loaded.
+        </para>
+        <para>
+For settings, modules implement one or more <codeEntityReference>T:FarNet.ModuleSettings`1</codeEntityReference>,
+roaming or local, optionally not browsable.
+        </para>
+      </content>
+    </section>
+
+    <section>
+      <title>Far Manager API</title>
+      <content>
+        <para>
+Main parts of Far Manager API are exposed as members of <codeEntityReference>T:FarNet.IFar</codeEntityReference>.
+        </para>
+<code language="c#">
+using FarNet;
+Far.Api
+</code>
+<code language="f#">
+open FarNet
+far
+</code>
+<code language="powershell">
+$Far
+</code>
+<code language="javascript">
+far
+</code>
+      </content>
+    </section>
+
+    <relatedTopics>
+      <externalLink>
+          <linkText>FarNet/wiki</linkText>
+          <linkAlternateText>FarNet wiki on GitHub</linkAlternateText>
+          <linkUri>https://github.com/nightroman/FarNet/wiki</linkUri>
+      </externalLink>
+    </relatedTopics>
+
+  </developerConceptualDocument>
+</topic>

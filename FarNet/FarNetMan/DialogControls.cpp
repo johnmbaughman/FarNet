@@ -1,10 +1,8 @@
 
-/*
-FarNet plugin for Far Manager
-Copyright (c) 2006-2016 Roman Kuzmin
-*/
+// FarNet plugin for Far Manager
+// Copyright (c) Roman Kuzmin
 
-#include "StdAfx.h"
+#include "stdafx.h"
 #include "DialogControls.h"
 #include "Dialog.h"
 #include "DialogLine.h"
@@ -17,7 +15,7 @@ bool Class::Prop::get() { return GetFlag(Flag); }\
 void Class::Prop::set(bool value) { SetFlag(Flag, value); }
 
 namespace FarNet
-{;
+{
 #pragma region FarControl
 
 FarControl::FarControl(FarDialog^ dialog, int index)
@@ -182,7 +180,7 @@ String^ FarControl::Text::get()
 	if (_dialog->_hDlg != INVALID_HANDLE_VALUE)
 		return gcnew String((const wchar_t*)Info.SendDlgMessage(_dialog->_hDlg, DM_GETCONSTTEXTPTR, Id, 0));
 	else
-		return _text;
+		return _text ? _text : String::Empty;
 }
 
 void FarControl::Text::set(String^ value)
@@ -412,9 +410,20 @@ String^ FarEdit::History::get()
 
 void FarEdit::History::set(String^ value)
 {
-	//! We can DM_SETHISTORY but why?
 	if (_dialog->_hDlg != INVALID_HANDLE_VALUE)
-		throw gcnew NotImplementedException;
+	{
+		if (SS(value))
+		{
+			SetFlag(DIF_HISTORY, true);
+
+			CStr str = value;
+			Info.SendDlgMessage(_dialog->_hDlg, DM_SETHISTORY, Id, (void*)str);
+		}
+		else
+		{
+			SetFlag(DIF_HISTORY, false);
+		}
+	}
 
 	_history = value;
 }
@@ -753,6 +762,12 @@ void FarBaseList::Free()
 	FreeItems();
 }
 
+void FarBaseList::ReplaceItems(IList<FarItem^>^ items, IList<int>^ subset)
+{
+	_Items = items;
+	_ii = subset;
+}
+
 void FarBaseList::DetachItems()
 {
 	if (_dialog->_hDlg == INVALID_HANDLE_VALUE)
@@ -991,5 +1006,4 @@ void FarListBox::SetFrame(int selected, int top)
 }
 
 #pragma endregion
-
 }

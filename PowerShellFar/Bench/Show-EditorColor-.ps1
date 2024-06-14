@@ -1,17 +1,18 @@
-
 <#
 .Synopsis
 	Shows color information for the current editor.
 	Author: Roman Kuzmin
 #>
 
-Assert-Far -Editor -Message 'Invoke this script from the editor.' -Title 'Show-EditorColor-.ps1'
+Assert-Far -Editor -Message 'Run this script from editor.' -Title Show-EditorColor-.ps1
 
 $Editor = $Far.Editor
+$colors = [System.Collections.Generic.List[FarNet.EditorColorInfo]]::new()
 foreach($line in $Editor.Lines) {
 	''
 	$text = $line.Text
-	foreach($color in $Editor.GetColors($line.Index) | Sort-Object Priority, Start, End) {
+	$Editor.GetColors($line.Index, $colors)
+	foreach($color in $colors | Sort-Object Priority, Start, End) {
 		if ($color.End -le $text.Length) {
 			'{0,-80} : {1}' -f $color, $text.Substring($color.Start, $color.End - $color.Start)
 		}

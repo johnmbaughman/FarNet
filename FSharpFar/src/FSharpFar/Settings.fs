@@ -1,29 +1,26 @@
 ﻿namespace FSharpFar
+open FarNet
 open System
-open System.Configuration
-open FarNet.Settings
+open System.Xml.Serialization
+open System.ComponentModel
 
-[<SettingsProvider(typeof<ModuleSettingsProvider>)>]
-type Settings () =
-    inherit ModuleSettings ()
-    static member Default = Settings ()
+[<XmlRoot("Data")>]
+type SettingsData() =
+    member val ErrorBackgroundColor = ConsoleColor.Red with get, set
+    member val ErrorForegroundColor = ConsoleColor.White with get, set
+    member val WarningBackgroundColor = ConsoleColor.Yellow with get, set
+    member val WarningForegroundColor = ConsoleColor.Black with get, set
 
-    [<DefaultSettingValue("Red"); SettingsManageability(SettingsManageability.Roaming); UserScopedSetting>]
-    member x.ErrorBackgroundColor
-        with get () = x.["ErrorBackgroundColor"] :?> ConsoleColor
-        and set (value: ConsoleColor) = x.["ErrorBackgroundColor"] <- value
+type Settings() =
+    inherit ModuleSettings<SettingsData>()
+    static member val Default = Settings()
 
-    [<DefaultSettingValue("White"); SettingsManageability(SettingsManageability.Roaming); UserScopedSetting>]
-    member x.ErrorForegroundColor
-        with get () = x.["ErrorForegroundColor"] :?> ConsoleColor
-        and set (value: ConsoleColor) = x.["ErrorForegroundColor"] <- value
+[<XmlRoot("Data")>]
+type WorkingsData() =
+    member val AutoCheck = true with get, set
+    member val AutoTips = true with get, set
 
-    [<DefaultSettingValue("Yellow"); SettingsManageability(SettingsManageability.Roaming); UserScopedSetting>]
-    member x.WarningBackgroundColor
-        with get () = x.["WarningBackgroundColor"] :?> ConsoleColor
-        and set (value: ConsoleColor) = x.["WarningBackgroundColor"] <- value
-
-    [<DefaultSettingValue("Black"); SettingsManageability(SettingsManageability.Roaming); UserScopedSetting>]
-    member x.WarningForegroundColor
-        with get () = x.["WarningForegroundColor"] :?> ConsoleColor
-        and set (value: ConsoleColor) = x.["WarningForegroundColor"] <- value
+[<Browsable(false)>]
+type Workings() =
+    inherit ModuleSettings<WorkingsData>(ModuleSettingsArgs(IsLocal = true))
+    static member val Default = Workings()

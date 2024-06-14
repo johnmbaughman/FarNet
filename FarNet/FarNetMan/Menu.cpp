@@ -1,27 +1,17 @@
 
-/*
-FarNet plugin for Far Manager
-Copyright (c) 2006-2016 Roman Kuzmin
-*/
+// FarNet plugin for Far Manager
+// Copyright (c) Roman Kuzmin
 
-#include "StdAfx.h"
+#include "stdafx.h"
 #include "Menu.h"
 
 namespace FarNet
-{;
-Menu::Menu()
-{}
-
-// Dispose of managed resources.
-// Call C++ finalizer to clean up unmanaged resources.
-// Mark the class as disposed (manually) to throw an exception if a disposed object is accessed.
+{
 Menu::~Menu()
 {
 	this->!Menu();
 }
 
-// The C++ finalizer destructor ensures that unmanaged resources get
-// released if the user releases the object without explicitly disposing of it.
 Menu::!Menu()
 {
 	Unlock();
@@ -30,12 +20,12 @@ Menu::!Menu()
 FarKey* Menu::CreateBreakKeys()
 {
 	FarKey* r = nullptr;
-	int nKey = _keys.Count;
+	int nKey = myKeys->Count;
 	if (nKey > 0)
 	{
 		r = new FarKey[nKey + 1];
 		int i = 0;
-		for each(KeyData^ k in _keys)
+		for each (KeyData ^ k in myKeys)
 		{
 			r[i].VirtualKeyCode = (WORD)k->VirtualKeyCode;
 			r[i].ControlKeyState = (DWORD)k->ControlKeyState;
@@ -52,8 +42,12 @@ int Menu::Flags()
 	int r = 0;
 	if (AutoAssignHotkeys) r |= FMENU_AUTOHIGHLIGHT;
 	if (ChangeConsoleTitle) r |= FMENU_CHANGECONSOLETITLE;
+	if (NoBox) r |= FMENU_SHOWNOBOX;
+	if (NoMargin) r |= FMENU_SHOWSHORTBOX;
+	if (NoShadow) r |= FMENU_NODRAWSHADOW;
 	if (ReverseAutoAssign) r |= FMENU_REVERSEAUTOHIGHLIGHT;
 	if (ShowAmpersands) r |= FMENU_SHOWAMPERSAND;
+	if (SingleBox) r |= FMENU_SHOWSINGLEBOX;
 	if (WrapCursor) r |= FMENU_WRAPMODE;
 	return r;
 }
@@ -93,9 +87,9 @@ void Menu::Unlock()
 FarMenuItem* Menu::CreateItems()
 {
 	int n = 0;
-	FarMenuItem* r = new struct FarMenuItem[_items->Count];
-	memset(r, 0, sizeof(FarMenuItem) * _items->Count);
-	for each(FarItem^ item1 in _items)
+	FarMenuItem* r = new struct FarMenuItem[myItems->Count];
+	memset(r, 0, sizeof(FarMenuItem) * myItems->Count);
+	for each (FarItem ^ item1 in myItems)
 	{
 		FarMenuItem& item2 = r[n];
 		item2.Text = NewChars(item1->Text);
@@ -108,7 +102,7 @@ void Menu::DeleteItems(FarMenuItem* items)
 {
 	if (items)
 	{
-		for(int i = Items->Count; --i >= 0;)
+		for (int i = Items->Count; --i >= 0;)
 			delete items[i].Text;
 		delete items;
 	}
@@ -117,11 +111,11 @@ void Menu::DeleteItems(FarMenuItem* items)
 void Menu::ShowMenu(FarMenuItem* items, const FarKey* breaks, const wchar_t* title, const wchar_t* bottom, const wchar_t* help)
 {
 	// validate X, Y to avoid crashes and out of screen
-	int x = _x < 0 ? -1 : _x < 2 ? 2 : _x;
-	int y = _y;
+	int x = X < 0 ? -1 : X < 2 ? 2 : X;
+	int y = Y;
 	if (y != -1)
 	{
-		int yMax = Far::Api->UI->WindowSize.Y - Math::Max(_items->Count, MaxHeight) - 4;
+		int yMax = Far::Api->UI->WindowSize.Y - Math::Max(myItems->Count, MaxHeight) - 4;
 		if (y > yMax)
 			y = yMax;
 		if (y < 0)
@@ -131,10 +125,10 @@ void Menu::ShowMenu(FarMenuItem* items, const FarKey* breaks, const wchar_t* tit
 	}
 
 	// update flags
-	for(int i = _items->Count; --i >= 0;)
+	for (int i = myItems->Count; --i >= 0;)
 	{
 		// source and destination
-		FarItem^ item1 = _items[i];
+		FarItem^ item1 = myItems[i];
 		FarMenuItem& item2 = items[i];
 
 		// common flags
@@ -147,14 +141,14 @@ void Menu::ShowMenu(FarMenuItem* items, const FarKey* breaks, const wchar_t* tit
 	}
 
 	// select an item (same as listbox!)
-	if (_selected >= _items->Count || SelectLast && _selected < 0)
-		_selected = _items->Count - 1;
-	if (_selected >= 0)
-		items[_selected].Flags |= MIF_SELECTED;
+	if (Selected >= myItems->Count || SelectLast && Selected < 0)
+		Selected = myItems->Count - 1;
+	if (Selected >= 0)
+		items[Selected].Flags |= MIF_SELECTED;
 
 	// show
 	intptr_t bc = -1;
-	_selected = (int)Info.Menu(
+	Selected = (int)Info.Menu(
 		&MainGuid,
 		&MainGuid,
 		x,
@@ -167,30 +161,30 @@ void Menu::ShowMenu(FarMenuItem* items, const FarKey* breaks, const wchar_t* tit
 		breaks,
 		&bc,
 		(const FarMenuItem*)items,
-		_items->Count);
+		myItems->Count);
 
-	_keyIndex = (int)bc;
+	myKeyIndex = (int)bc;
 }
 
 bool Menu::Show()
 {
-	bool lock = _createdItems == nullptr;
-	if (lock)
+	bool toLock = _createdItems == nullptr;
+	if (toLock)
 		Lock();
-	
+
 	try
 	{
-		for(;;)
+		for (;;)
 		{
 			ShowMenu(_createdItems, _createdBreaks, _title, _bottom, _help);
 
 			// check the key before the selected, it may work in empty menus with nothing selected
-			if (_keyIndex >= 0)
+			if (myKeyIndex >= 0)
 			{
-				if (_handlers[_keyIndex])
+				if (myHandlers[myKeyIndex])
 				{
-					MenuEventArgs e((_selected >= 0 ? _items[_selected] : nullptr));
-					_handlers[_keyIndex]((Sender ? Sender : this), %e);
+					MenuEventArgs e((Selected >= 0 ? myItems[Selected] : nullptr));
+					myHandlers[myKeyIndex]((Sender ? Sender : this), % e);
 					if (e.Ignore || e.Restart)
 						continue;
 				}
@@ -198,15 +192,15 @@ bool Menu::Show()
 			}
 
 			// check selected
-			if (_selected < 0)
+			if (Selected < 0)
 				return false;
-			
+
 			// call click (if not a break key!)
-			FarItem^ item = _items[_selected];
+			FarItem^ item = myItems[Selected];
 			if (item->Click)
 			{
 				MenuEventArgs e(item);
-				item->Click((Sender ? Sender : this), %e);
+				item->Click((Sender ? Sender : this), % e);
 				if (e.Ignore || e.Restart)
 					continue;
 			}
@@ -216,7 +210,7 @@ bool Menu::Show()
 	}
 	finally
 	{
-		if (lock)
+		if (toLock)
 			Unlock();
 	}
 }

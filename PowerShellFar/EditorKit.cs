@@ -1,659 +1,648 @@
 
-/*
-PowerShellFar module for Far Manager
-Copyright (c) 2006-2016 Roman Kuzmin
-*/
+// PowerShellFar module for Far Manager
+// Copyright (c) Roman Kuzmin
 
+using FarNet;
+using FarNet.Forms;
+using FarNet.Tools;
 using System;
-using System.Collections;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
 using System.Text;
 using System.Text.RegularExpressions;
-using FarNet;
-using FarNet.Forms;
-using FarNet.Tools;
 
-namespace PowerShellFar
+namespace PowerShellFar;
+
+/// <summary>
+/// Editor tools.
+/// </summary>
+static class EditorKit
 {
-	/// <summary>
-	/// Editor tools.
-	/// </summary>
-	static class EditorKit
+	static bool _doneTabExpansion;
+
+	static void InitTabExpansion()
 	{
-		const string CompletionText = "CompletionText";
-		const string ListItemText = "ListItemText";
-		/*
-		V3 completion. CompletionText is used in lists for:
-		Command - avoid two Get-History -> Get-History, Microsoft.PowerShell.Core\Get-History
-		ProviderItem - avoid two Test-Far.ps1 -> .\Test-Far.ps1, Test-Far.ps1
-		ProviderContainer - for consistency with ProviderItem
-
-		//! `@args` instead `param($inputScript, $cursorColumn)` to avoid visible variables.
-		*/
-		const string CallTabExpansionV3 = @"
-$r = TabExpansion2 @args
-@{
-	ReplacementIndex = $r.ReplacementIndex
-	ReplacementLength = $r.ReplacementLength
-	CompletionMatches = @(foreach($m in $r.CompletionMatches) {
-		switch ($m.ResultType) {
-			Command { $m.CompletionText }
-			ProviderItem { $m.CompletionText }
-			ProviderContainer { $m.CompletionText }
-			default { @{CompletionText = $m.CompletionText; ListItemText = $m.ListItemText} }
-		}
-	})
-}
-";
-		// V2 completion
-		//! Ideally, we should use private variable. But who cares of v2?
-		const string CallTabExpansionV2 = @"
-param($inputScript, $cursorColumn)
-$line = $inputScript.Substring(0, $cursorColumn)
-$word = if ($line -match '(?:^|\s)(\S+)$') {$matches[1]} else {''}
-@{
-	ReplacementIndex = $line.Length - $word.Length
-	ReplacementLength = $word.Length
-	CompletionMatches = @(TabExpansion $line $word)
-}
-";
-
-		static bool _doneTabExpansion;
-		static string _pathTabExpansion;
-		static string _callTabExpansion;
-
-		static void InitTabExpansion()
+		if (!_doneTabExpansion)
 		{
-			if (!_doneTabExpansion)
+			_doneTabExpansion = true;
+			InitTabExpansion(null);
+		}
+	}
+
+	//! It is called once in the main session and once per each local and remote session.
+	public static void InitTabExpansion(Runspace? runspace)
+	{
+		// load TabExpansion
+		using var ps = runspace is null ? A.Psf.NewPowerShell() : PowerShell.Create();
+		if (runspace is not null)
+			ps.Runspace = runspace;
+
+		ps.AddCommand(Path.Combine(A.Psf.AppHome, "TabExpansion2.ps1"), false).Invoke();
+	}
+
+	/// <summary>
+	/// Expands PowerShell code in an edit line.
+	/// </summary>
+	/// <param name="editLine">Editor line, command line or dialog edit box line; if null then <see cref="IFar.Line"/> is used.</param>
+	/// <param name="runspace">Runspace or null for the main.</param>
+	/// <seealso cref="Actor.ExpandCode"/>
+	public static void ExpandCode(ILine? editLine, Runspace? runspace)
+	{
+		using var IgnoreApplications = new FarHost.IgnoreApplications();
+
+		InitTabExpansion();
+
+		// hot line
+		if (editLine is null)
+		{
+			editLine = Far.Api.Line;
+			if (editLine is null)
 			{
-				_doneTabExpansion = true;
-				InitTabExpansion(null);
+				A.Message("There is no current editor line.");
+				return;
 			}
 		}
-		//! It is called once in the main session and once per each local and remote session.
-		public static void InitTabExpansion(Runspace runspace)
+
+		int lineOffset = 0;
+		string inputScript;
+		int cursorColumn;
+		var prefix = string.Empty;
+
+		IEditor? editor = null;
+		InteractiveArea? area;
+
+		// script?
+		if (editLine.WindowKind == WindowKind.Editor && My.PathEx.IsPSFile((editor = Far.Api.Editor)!.FileName))
 		{
-			// init path and caller
-			if (_pathTabExpansion == null)
-			{
-				if (A.Psf.PSVersion.Major > 2)
-				{
-					_pathTabExpansion = Path.Combine(A.Psf.AppHome, "TabExpansion2.ps1");
-					_callTabExpansion = CallTabExpansionV3;
-				}
-				else
-				{
-					_pathTabExpansion = Path.Combine(A.Psf.AppHome, "TabExpansion.ps1");
-					_callTabExpansion = CallTabExpansionV2;
-				}
-			}
+			int lineIndex = editor.Caret.Y;
+			int lastIndex = editor.Count - 1;
 
-			// load TabExpansion
-			using (var ps = runspace == null ? A.Psf.NewPowerShell() : PowerShell.Create())
-			{
-				if (runspace != null)
-					ps.Runspace = runspace;
+			// previous text
+			var sb = new StringBuilder();
+			for (int i = 0; i < lineIndex; ++i)
+				sb.AppendLine(editor[i].Text);
 
-				ps.AddCommand(_pathTabExpansion, false).Invoke();
-			}
+			// current line
+			lineOffset = sb.Length;
+			cursorColumn = lineOffset + editLine.Caret;
+
+			// remaining text
+			for (int i = lineIndex; i < lastIndex; ++i)
+				sb.AppendLine(editor[i].Text);
+			sb.Append(editor[lastIndex]);
+
+			// whole text
+			inputScript = sb.ToString();
 		}
-		static string TECompletionText(object value)
+		// area?
+		else if (editor != null && editor.Host is Interactive console && (area = console.CommandArea()) != null)
 		{
-			var t = Cast<Hashtable>.From(value); //! remote gets PSObject
-			if (t == null)
-				return value.ToString();
+			int lineIndex = area.Caret.Y;
+			int lastIndex = area.LastLineIndex;
 
-			return t[CompletionText].ToString();
+			// previous text
+			var sb = new StringBuilder();
+			for (int i = area.FirstLineIndex; i < lineIndex; ++i)
+				sb.AppendLine(editor[i].Text);
+
+			// current line
+			lineOffset = sb.Length;
+			cursorColumn = lineOffset + area.Caret.X;
+
+			// remaining text
+			for (int i = lineIndex; i < lastIndex; ++i)
+				sb.AppendLine(editor[i].Text);
+			sb.Append(editor[lastIndex]);
+
+			// whole text
+			inputScript = sb.ToString();
 		}
-		static string TEListItemText(object value)
+		// line
+		else
 		{
-			var t = Cast<Hashtable>.From(value); //! remote gets PSObject
-			if (t == null)
-				return value.ToString();
+			// original line
+			inputScript = editLine.Text;
+			cursorColumn = editLine.Caret;
 
-			var r = t[ListItemText];
-			if (r != null)
-				return r.ToString();
+			//_200805_i3 Deal with auto complete selection.
+			// use selection start as cursor column
+			var selectionSpan = editLine.SelectionSpan;
+			if (cursorColumn == selectionSpan.End)
+				cursorColumn = selectionSpan.Start;
 
-			return t[CompletionText].ToString();
+			// process prefix, used to be just for panels but it is needed in dialogs, too
+			var split = Zoo.SplitCommandWithPrefix(inputScript);
+			prefix = split.Key;
+			inputScript = split.Value;
+
+			// correct caret
+			cursorColumn -= prefix.Length;
+			if (cursorColumn < 0)
+				return;
 		}
-		/// <summary>
-		/// Expands PowerShell code in an edit line.
-		/// </summary>
-		/// <param name="editLine">Editor line, command line or dialog edit box line; if null then <see cref="IFar.Line"/> is used.</param>
-		/// <param name="runspace">Runspace or null for the main.</param>
-		/// <seealso cref="Actor.ExpandCode"/>
-		[System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Maintainability", "CA1506:AvoidExcessiveClassCoupling")]
-		[System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Maintainability", "CA1502:AvoidExcessiveComplexity")]
-		public static void ExpandCode(ILine editLine, Runspace runspace)
+
+		// skip empty (also avoid errors)
+		if (inputScript.Length == 0)
+			return;
+
+		// invoke
+		try
 		{
-			InitTabExpansion();
+			// call TabExpansion
+			using var ps = runspace is null ? A.Psf.NewPowerShell() : PowerShell.Create();
+			if (runspace is not null)
+				ps.Runspace = runspace;
 
-			// hot line
-			if (editLine == null)
-			{
-				editLine = Far.Api.Line;
-				if (editLine == null)
-				{
-					A.Message("There is no current editor line.");
-					return;
-				}
-			}
+			var result = (CommandCompletion)ps
+				.AddCommand("TabExpansion2", true)
+				.AddArgument(inputScript)
+				.AddArgument(cursorColumn)
+				.Invoke()[0].BaseObject;
 
-			int lineOffset = 0;
-			string inputScript;
-			int cursorColumn;
-			var prefix = string.Empty;
-
-			IEditor editor = null;
-			Interactive console;
-			InteractiveArea area;
-
-			// script?
-			if (A.Psf.PSVersion.Major > 2 && editLine.WindowKind == WindowKind.Editor && My.PathEx.IsPSFile((editor = Far.Api.Editor).FileName))
-			{
-				int lineIndex = editor.Caret.Y;
-				int lastIndex = editor.Count - 1;
-
-				// previous text
-				var sb = new StringBuilder();
-				for (int i = 0; i < lineIndex; ++i)
-					sb.AppendLine(editor[i].Text);
-
-				// current line
-				lineOffset = sb.Length;
-				cursorColumn = lineOffset + editLine.Caret;
-
-				// remaining text
-				for (int i = lineIndex; i < lastIndex; ++i)
-					sb.AppendLine(editor[i].Text);
-				sb.Append(editor[lastIndex]);
-
-				// whole text
-				inputScript = sb.ToString();
-			}
-			// area?
-			else if (editor != null && (console = editor.Host as Interactive) != null && (area = console.CommandArea()) != null)
-			{
-				int lineIndex = area.Caret.Y;
-				int lastIndex = area.LastLineIndex;
-
-				// previous text
-				var sb = new StringBuilder();
-				for (int i = area.FirstLineIndex; i < lineIndex; ++i)
-					sb.AppendLine(editor[i].Text);
-
-				// current line
-				lineOffset = sb.Length;
-				cursorColumn = lineOffset + area.Caret.X;
-
-				// remaining text
-				for (int i = lineIndex; i < lastIndex; ++i)
-					sb.AppendLine(editor[i].Text);
-				sb.Append(editor[lastIndex]);
-
-				// whole text
-				inputScript = sb.ToString();
-			}
-			// line
-			else
-			{
-				// original line
-				inputScript = editLine.Text;
-				cursorColumn = editLine.Caret;
-
-				// process prefix, used to be just for panels but it is needed in dialogs, too
-				Entry.SplitCommandWithPrefix(ref inputScript, out prefix);
-
-				// correct caret
-				cursorColumn -= prefix.Length;
-				if (cursorColumn < 0)
-					return;
-			}
-
-			// skip empty (also avoid errors)
-			if (inputScript.Length == 0)
+			// results
+			var matches = result.CompletionMatches;
+			int replacementIndex = result.ReplacementIndex;
+			int replacementLength = result.ReplacementLength;
+			replacementIndex -= lineOffset;
+			if (replacementIndex < 0 || replacementLength < 0)
 				return;
 
-			// invoke
-			try
+			// original or joined list
+			IReadOnlyList<CompletionResult> words = matches;
+
+			// variables from the current editor
+			if (editLine.WindowKind == WindowKind.Editor)
 			{
-				// call TabExpansion
-				Hashtable result;
-				using (var ps = runspace == null ? A.Psf.NewPowerShell() : PowerShell.Create())
+				// replaced text
+				var lastWord = inputScript.Substring(lineOffset + replacementIndex, replacementLength);
+
+				//! as TabExpansion.ps1 but ends with \$(\w*)$
+				var matchVar = MyRegex.CompleteVariable().Match(lastWord);
+				if (matchVar.Success)
 				{
-					if (runspace != null)
-						ps.Runspace = runspace;
+					var start = matchVar.Groups[1].Value;
+					var scope = matchVar.Groups[2].Value;
+					var re = new Regex(@"\$(global:|script:|private:)?(" + scope + matchVar.Groups[3].Value + @"\w+:?)", RegexOptions.IgnoreCase);
 
-					result = (Hashtable)ps.AddScript(_callTabExpansion, true).AddArgument(inputScript).AddArgument(cursorColumn).Invoke()[0].BaseObject;
-				}
-
-				// results
-				var words = Cast<IList>.From(result["CompletionMatches"]); //! remote gets PSObject
-				int replacementIndex = (int)result["ReplacementIndex"];
-				int replacementLength = (int)result["ReplacementLength"];
-				replacementIndex -= lineOffset;
-				if (replacementIndex < 0 || replacementLength < 0)
-					return;
-
-				// variables from the current editor
-				if (editLine.WindowKind == WindowKind.Editor)
-				{
-					// replaced text
-					var lastWord = inputScript.Substring(lineOffset + replacementIndex, replacementLength);
-
-					//! as TabExpansion.ps1 but ends with \$(\w*)$
-					var matchVar = Regex.Match(lastWord, @"^(.*[!;\(\{\|""'']*)\$(global:|script:|private:)?(\w*)$", RegexOptions.IgnoreCase);
-					if (matchVar.Success)
+					var variables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+					foreach (var line1 in Far.Api.Editor!.Lines)
 					{
-						var start = matchVar.Groups[1].Value;
-						var scope = matchVar.Groups[2].Value;
-						var re = new Regex(@"\$(global:|script:|private:)?(" + scope + matchVar.Groups[3].Value + @"\w+:?)", RegexOptions.IgnoreCase);
-
-						var variables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-						foreach (var line1 in Far.Api.Editor.Lines)
+						foreach (var m in re.Matches(line1.Text).Cast<Match>())
 						{
-							foreach (Match m in re.Matches(line1.Text))
+							var all = m.Value;
+							if (all[^1] != ':')
 							{
-								var all = m.Value;
-								if (all[all.Length - 1] != ':')
-								{
-									variables.Add(start + all);
-									if (scope.Length == 0 && m.Groups[1].Value.Length > 0)
-										variables.Add(start + "$" + m.Groups[2].Value);
-								}
+								variables.Add(start + all);
+								if (scope.Length == 0 && m.Groups[1].Value.Length > 0)
+									variables.Add(start + "$" + m.Groups[2].Value);
 							}
 						}
-
-						// union lists
-						foreach (var x in words)
-							if (x != null)
-								variables.Add(TECompletionText(x));
-
-						// final sorted list
-						words = variables.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
 					}
-				}
 
-				// expand
-				ExpandText(editLine, replacementIndex + prefix.Length, replacementLength, words);
-			}
-			catch (RuntimeException) { }
-		}
-		public static void ExpandText(ILine editLine, int replacementIndex, int replacementLength, IList words)
-		{
-			bool isEmpty = words.Count == 0;
-			var text = editLine.Text;
-			var last = replacementIndex + replacementLength - 1;
-			bool custom = last > 0 && last < text.Length && text[last] == '='; //_140112_150217 last can be out of range
-
-			// select a word
-			string word;
-			if (words.Count == 1)
-			{
-				// 1 word
-				if (words[0] == null)
-					return;
-
-				word = TECompletionText(words[0]);
-			}
-			else
-			{
-				// make menu
-				IListMenu menu = Far.Api.CreateListMenu();
-				var cursor = Far.Api.UI.WindowCursor;
-				menu.X = cursor.X;
-				menu.Y = cursor.Y;
-				Settings.Default.PopupMenu(menu);
-				if (isEmpty)
-				{
-					menu.Add(Res.Empty).Disabled = true;
-					menu.NoInfo = true;
-					menu.Show();
-					return;
-				}
-
-				menu.Incremental = "*";
-				menu.IncrementalOptions = PatternOptions.Substring;
-
-				foreach (var it in words)
-				{
-					if (it == null) continue;
-					var item = new SetItem();
-					item.Text = TEListItemText(it);
-					item.Data = it;
-					menu.Items.Add(item);
-				}
-
-				if (menu.Items.Count == 0)
-					return;
-
-				if (menu.Items.Count == 1)
-				{
-					word = TECompletionText(menu.Items[0].Data);
-				}
-				else
-				{
-					// show menu
-					if (!menu.Show())
-						return;
-					word = TECompletionText(menu.Items[menu.Selected].Data);
-				}
-			}
-
-			// replace
-
-			// head before replaced part
-			string head = text.Substring(0, replacementIndex);
-
-			// custom pattern
-			int index, caret;
-			if (custom && (index = word.IndexOf('#')) >= 0)
-			{
-				word = word.Substring(0, index) + word.Substring(index + 1);
-				caret = head.Length + index;
-			}
-			// standard
-			else
-			{
-				caret = head.Length + word.Length;
-			}
-
-			// set new text = old head + expanded + old tail
-			editLine.Text = head + word + text.Substring(replacementIndex + replacementLength);
-
-			// set caret
-			editLine.Caret = caret;
-		}
-		public static string ActiveText
-		{
-			get
-			{
-				// case: editor
-				if (Far.Api.Window.Kind == WindowKind.Editor)
-				{
-					var editor = Far.Api.Editor;
-					if (editor.SelectionExists)
-						return editor.GetSelectedText();
-					return editor.Line.Text;
-				}
-
-				// other lines
-				ILine line = Far.Api.Line;
-				if (line == null)
-					return string.Empty;
-				else
-					return line.ActiveText;
-			}
-			set
-			{
-				// case: editor
-				if (Far.Api.Window.Kind == WindowKind.Editor)
-				{
-					var editor = Far.Api.Editor;
-					switch (editor.SelectionKind)
+					// join lists
+					if (variables.Count > 0)
 					{
-						case PlaceKind.Column:
-							throw new NotSupportedException("Rectangular selection is not supported.");
-						case PlaceKind.Stream:
-							editor.SetSelectedText(value);
-							return;
+						List<CompletionResult> list = new(variables.Count + words.Count);
+						foreach (var text in variables.OrderBy(x => x))
+						{
+							if (!words.Any(x => text.Equals(x.CompletionText, StringComparison.OrdinalIgnoreCase)))
+								list.Add(new CompletionResult(text, text, CompletionResultType.Variable, text));
+						}
+
+						list.AddRange(words);
+						words = list;
 					}
-
-					editor.Line.Text = value;
-					return;
-				}
-
-				// other lines
-				ILine line = Far.Api.Line;
-				if (line == null)
-					throw new InvalidOperationException("There is no current text to set.");
-				else
-					line.ActiveText = value;
-			}
-		}
-		public static void OnEditorOpened1(object sender, EventArgs e)
-		{
-			A.Psf.Invoking();
-
-			try
-			{
-				var profile = Entry.RoamingData + "\\Profile-Editor.ps1";
-				if (File.Exists(profile))
-				{
-					using (var ps = A.Psf.NewPowerShell())
-						ps.AddCommand(profile, false).Invoke();
 				}
 			}
-			catch (RuntimeException ex)
-			{
-				throw new RuntimeException("Error in Profile-Editor.ps1, see $Error for details.", ex);
-			}
-			finally
-			{
-				Far.Api.AnyEditor.Opened -= OnEditorOpened1;
-			}
+
+			// expand
+			ExpandText(editLine, replacementIndex + prefix.Length, replacementLength, words);
 		}
-		public static void OnEditorOpened2(object sender, EventArgs e)
+		catch (RuntimeException) { }
+	}
+
+	public static void ExpandText(ILine editLine, int replacementIndex, int replacementLength, IReadOnlyList<CompletionResult> words)
+	{
+		// select a word
+		string word;
+		if (words.Count == 1)
 		{
-			var editor = (IEditor)sender;
-			var fileName = editor.FileName;
-			bool isInteractive = fileName.EndsWith(Word.InteractiveSuffix, StringComparison.OrdinalIgnoreCase);
-			if (isInteractive)
-			{
-				if (editor.Host == null)
-					editor.Host = new Interactive(editor);
-			}
-			else if (My.PathEx.IsPSFile(fileName))
-			{
-				editor.KeyDown += OnKeyDownPSFile;
-				editor.Changed += OnChangedPSFile;
-			}
+			word = words[0].CompletionText;
 		}
-		static void OnChangedPSFile(object sender, EditorChangedEventArgs e)
+		else
 		{
-			if (e.Kind == EditorChangeKind.LineChanged)
+			// make menu
+			IListMenu menu = Far.Api.CreateListMenu();
+			var cursor = Far.Api.UI.WindowCursor;
+			menu.X = cursor.X;
+			menu.Y = cursor.Y;
+			Settings.Default.PopupMenu(menu);
+
+			// case: empty
+			if (words.Count == 0)
+			{
+				menu.Add(Res.Empty).Disabled = true;
+				menu.NoInfo = true;
+				menu.Show();
+				return;
+			}
+
+			menu.Incremental = "*";
+			menu.IncrementalOptions = PatternOptions.Substring;
+
+			// populate menu
+			int end = words.Count - 1;
+			for (int i = 0; i <= end; ++i)
+			{
+				var str1 = words[i].ListItemText;
+				var str2 = words[i].CompletionText;
+				if (i > 0 && str1 == words[i - 1].ListItemText || i < end && str1 == words[i + 1].ListItemText)
+					str1 = str2;
+
+				var item = new SetItem { Text = str1, Data = str2 };
+				menu.Items.Add(item);
+			}
+
+			// show menu
+			if (!menu.Show())
 				return;
 
-			var editor = (IEditor)sender;
-			var script = editor.FileName;
-			var line = e.Line + 1;
+			word = (string)menu.Items[menu.Selected].Data!;
+		}
 
-			IEnumerable<LineBreakpoint> bps = null;
-			int delta = 0;
-			if (e.Kind == EditorChangeKind.LineAdded)
+		// get original text and custom mode
+		var text = editLine.Text;
+
+		//_200805_i3 Deal with auto complete selection.
+		// remove selected text before replacement
+		var selectionSpan = editLine.SelectionSpan;
+		if (selectionSpan.Start == replacementIndex + replacementLength)
+			text = string.Concat(text.AsSpan(0, selectionSpan.Start), text.AsSpan(selectionSpan.End, text.Length - selectionSpan.End));
+
+		// replace
+
+		// head before replaced part
+		string head = text[..replacementIndex];
+
+		// set new text = old head + expanded + old tail
+		editLine.Text = string.Concat(head, word, text.AsSpan(replacementIndex + replacementLength));
+
+		// set caret
+		editLine.Caret = head.Length + word.Length;
+	}
+
+	public static string ActiveText
+	{
+		get
+		{
+			// case: editor
+			if (Far.Api.Window.Kind == WindowKind.Editor)
 			{
-				delta = 1;
-				bps = A.Psf.Breakpoints.Where(x => x.Line >= line && x.Script.Equals(script, StringComparison.OrdinalIgnoreCase)).ToArray();
+				var editor = Far.Api.Editor!;
+				if (editor.SelectionExists)
+					return editor.GetSelectedText();
+				return editor.Line.Text;
 			}
+
+			// other lines
+			var line = Far.Api.Line;
+			if (line is null)
+				return string.Empty;
 			else
+				return line.ActiveText;
+		}
+		set
+		{
+			// case: editor
+			if (Far.Api.Window.Kind == WindowKind.Editor)
 			{
-				var bp = A.Psf.Breakpoints.FirstOrDefault(x => x.Line == line && x.Script.Equals(script, StringComparison.OrdinalIgnoreCase));
-				if (bp != null)
-					A.RemoveBreakpoint(bp);
+				var editor = Far.Api.Editor!;
+				switch (editor.SelectionKind)
+				{
+					case PlaceKind.Column:
+						throw new NotSupportedException("Rectangular selection is not supported.");
+					case PlaceKind.Stream:
+						editor.SetSelectedText(value);
+						return;
+				}
 
-				delta = -1;
-				bps = A.Psf.Breakpoints.Where(x => x.Line > line && x.Script.Equals(script, StringComparison.OrdinalIgnoreCase)).ToArray();
+				editor.Line.Text = value;
+				return;
 			}
 
-			foreach (var bp in bps)
+			// other lines
+			var line = Far.Api.Line;
+			if (line is null)
+				throw new InvalidOperationException("There is no current text to set.");
+			else
+				line.ActiveText = value;
+		}
+	}
+
+	public static void OnEditorFirstOpening(object? sender, EventArgs e)
+	{
+		A.Psf.Invoking();
+
+		try
+		{
+			var profile = Entry.RoamingData + "\\Profile-Editor.ps1";
+			if (File.Exists(profile))
 			{
+				using var ps = A.Psf.NewPowerShell();
+				ps.AddCommand(profile, false).Invoke();
+			}
+		}
+		catch (RuntimeException ex)
+		{
+			throw new RuntimeException("Error in Profile-Editor.ps1, see $Error for details.", ex);
+		}
+	}
+
+	public static void OnEditorOpened(object? sender, EventArgs e)
+	{
+		var editor = (IEditor)sender!;
+		var fileName = editor.FileName;
+		bool isInteractive = fileName.EndsWith(Word.InteractiveSuffix, StringComparison.OrdinalIgnoreCase);
+		if (isInteractive)
+		{
+			editor.Host ??= new Interactive(editor);
+		}
+		else if (My.PathEx.IsPSFile(fileName))
+		{
+			editor.KeyDown += OnKeyDownPSFile;
+			editor.Changed += OnChangedPSFile;
+		}
+	}
+
+	static void OnChangedPSFile(object? sender, EditorChangedEventArgs e)
+	{
+		if (e.Kind == EditorChangeKind.LineChanged)
+			return;
+
+		var editor = (IEditor)sender!;
+		var line = e.Line + 1;
+		var fullPath = Path.GetFullPath(editor.FileName); //!
+
+		IEnumerable<LineBreakpoint>? bps = null;
+		int delta = 0;
+		if (e.Kind == EditorChangeKind.LineAdded)
+		{
+			delta = 1;
+			bps = A.Psf.Breakpoints.Where(x => x.Line >= line && x.Script.Equals(fullPath, StringComparison.OrdinalIgnoreCase)).ToArray();
+		}
+		else
+		{
+			var bp = A.Psf.Breakpoints.FirstOrDefault(x => x.Line == line && x.Script.Equals(fullPath, StringComparison.OrdinalIgnoreCase));
+			if (bp != null)
 				A.RemoveBreakpoint(bp);
-				A.SetBreakpoint(bp.Script, bp.Line + delta, bp.Action);
-			}
-		}
-		/// <summary>
-		/// Called on key in *.ps1.
-		/// </summary>
-		static void OnKeyDownPSFile(object sender, KeyEventArgs e)
-		{
-			// editor; skip if selected
-			IEditor editor = (IEditor)sender;
 
-			switch (e.Key.VirtualKeyCode)
-			{
-				case KeyCode.F1:
-					{
-						if (e.Key.IsShift())
-						{
-							// [ShiftF1]
-							e.Ignore = true;
-							Help.ShowHelpForContext();
-						}
-						return;
-					}
-				case KeyCode.F5:
-					{
-						if (e.Key.Is())
-						{
-							// [F5]
-							e.Ignore = true;
-							InvokeScriptBeingEdited(editor);
-						}
-						return;
-					}
-				case KeyCode.Tab:
-					{
-						if (e.Key.Is())
-						{
-							// [Tab]
-							if (!editor.SelectionExists && NeedsTabExpansion(editor))
-							{
-								// TabExpansion
-								e.Ignore = true;
-								A.Psf.ExpandCode(editor.Line);
-								editor.Redraw();
-							}
-						}
-						return;
-					}
-			}
+			delta = -1;
+			bps = A.Psf.Breakpoints.Where(x => x.Line > line && x.Script.Equals(fullPath, StringComparison.OrdinalIgnoreCase)).ToArray();
 		}
-		public static void InvokeSelectedCode()
-		{
-			string code;
-			bool toCleanCmdLine = false;
-			WindowKind wt = Far.Api.Window.Kind;
 
-			if (wt == WindowKind.Editor)
-			{
-				var editor = Far.Api.Editor;
-				code = editor.GetSelectedText();
-				if (string.IsNullOrEmpty(code))
-					code = editor[editor.Caret.Y].Text;
-			}
-			else if (wt == WindowKind.Dialog)
-			{
-				IDialog dialog = Far.Api.Dialog;
-				IEdit edit = dialog.Focused as IEdit;
-				if (edit == null)
+		foreach (var bp in bps)
+		{
+			A.RemoveBreakpoint(bp);
+			A.SetBreakpoint(bp.Script, bp.Line + delta, bp.Action);
+		}
+	}
+
+	/// <summary>
+	/// Called on key in *.ps1.
+	/// </summary>
+	static void OnKeyDownPSFile(object? sender, KeyEventArgs e)
+	{
+		switch (e.Key.VirtualKeyCode)
+		{
+			case KeyCode.F1:
+				if (e.Key.IsShift())
 				{
-					Far.Api.Message("The current control must be an edit box.", Res.Me);
-					return;
+					// [ShiftF1]
+					e.Ignore = true;
+					Help.ShowHelpForContext();
 				}
-				code = edit.Line.SelectedText;
-				if (string.IsNullOrEmpty(code))
-					code = edit.Text;
+				return;
+			case KeyCode.F5:
+				if (e.Key.Is())
+				{
+					// [F5]
+					e.Ignore = true;
+					var editor = (IEditor)sender!;
+					InvokeScriptFromEditor(editor);
+				}
+				return;
+			case KeyCode.Tab:
+				if (e.Key.Is())
+				{
+					// [Tab]
+					var editor = (IEditor)sender!;
+					if (!editor.SelectionExists && NeedsTabExpansion(editor))
+					{
+						// TabExpansion
+						e.Ignore = true;
+						A.Psf.ExpandCode(editor.Line);
+						editor.Redraw();
+					}
+				}
+				return;
+		}
+	}
+
+	public static void InvokeSelectedCode()
+	{
+		string code;
+		var from = Far.Api.Window.Kind;
+
+		if (from == WindowKind.Editor)
+		{
+			var editor = Far.Api.Editor!;
+			code = editor.GetSelectedText();
+			if (string.IsNullOrEmpty(code))
+				code = editor[editor.Caret.Y].Text;
+		}
+		else if (from == WindowKind.Dialog)
+		{
+			var dialog = Far.Api.Dialog!;
+			if (dialog.Focused is not IEdit edit)
+				return;
+			code = edit.Line.SelectedText;
+			if (string.IsNullOrEmpty(code))
+				code = edit.Text;
+		}
+		else
+		{
+			var line = Far.Api.CommandLine;
+			code = line.SelectedText;
+			if (string.IsNullOrEmpty(code))
+				code = line.Text;
+		}
+
+		var split = Zoo.SplitCommandWithPrefix(code);
+		A.Psf.Run(new RunArgs(split.Value));
+	}
+
+	// PSF sets the current directory and location to the script directory.
+	// This is often useful and consistent with invoking from panels.
+	// NOTE: ISE [F5] does not.
+	public static void InvokeScriptFromEditor(IEditor? editor)
+	{
+		// editor
+		editor ??= Far.Api.Editor ?? throw new ModuleException("No current editor.");
+
+		// commit
+		editor.Save();
+
+		var fileName = editor.FileName;
+
+		// case: Invoke-Build
+		if (fileName.EndsWith(".build.ps1", StringComparison.OrdinalIgnoreCase) ||
+			fileName.EndsWith(".test.ps1", StringComparison.OrdinalIgnoreCase))
+		{
+			InvokeTaskFromEditor(editor);
+			return;
+		}
+
+		// sync the directory and location to the script directory
+		// maybe it is questionable but it is very handy too often
+		string dir0, dir1;
+
+		// save/set the directory, allow failures (e.g. a long path)
+		// note: GetDirectoryName fails on a long path, too
+		try
+		{
+			dir1 = Path.GetDirectoryName(fileName)!;
+			dir0 = Environment.CurrentDirectory;
+			Environment.CurrentDirectory = dir1;
+		}
+		catch (PathTooLongException)
+		{
+			// PowerShell is not able to invoke this script anyway, almost for sure
+			Far.Api.Message("The script path is too long.\rInvoking is not supported.");
+			return;
+		}
+
+		try
+		{
+			// push/set the location; let's ignore issues
+			A.Psf.Engine.SessionState.Path.PushCurrentLocation(null);
+			A.Psf.Engine.SessionState.Path.SetLocation(Kit.EscapeWildcard(dir1));
+
+			// invoke the script by the runner or directly
+			if (fileName.EndsWith(".fas.ps1", StringComparison.OrdinalIgnoreCase))
+			{
+				A.InvokeCode("Start-FarTask $args[0]", editor.FileName);
 			}
 			else
 			{
-				ILine cl = Far.Api.CommandLine;
-				code = cl.SelectedText;
-				if (string.IsNullOrEmpty(code))
-				{
-					code = cl.Text;
-					toCleanCmdLine = true;
-				}
-
-				string prefix;
-				Entry.SplitCommandWithPrefix(ref code, out prefix);
+				A.Psf.Run(new RunArgs($"& '{fileName.Replace("'", "''")}'"));
 			}
-			if (code.Length == 0)
-				return;
-
-			// go
-			bool ok = A.Psf.Act(code, null, wt != WindowKind.Editor);
-
-			// clean the command line if ok
-			if (ok && toCleanCmdLine && wt != WindowKind.Editor)
-				Far.Api.CommandLine.Text = string.Empty;
 		}
-		// PSF sets the current directory and location to the script directory.
-		// This is often useful and consistent with invoking from panels.
-		// NOTE: ISE [F5] does not.
-		public static void InvokeScriptBeingEdited(IEditor editor)
+		finally
 		{
-			// editor
-			if (editor == null)
-				editor = A.Psf.Editor();
+			// restore the directory first
+			Environment.CurrentDirectory = dir0;
 
-			// commit
-			editor.Save();
+			// then pop the location, it may fail perhaps
+			A.Psf.Engine.SessionState.Path.PopLocation(null);
+		}
+	}
 
-			// sync the directory and location to the script directory
-			// maybe it is questionable but it is very handy too often
-			string dir0, dir1;
+	//! Use PowerShell for getting tasks, script block fails with weird NRE on exit.
+	public static void InvokeTaskFromEditor(IEditor editor)
+	{
+		var fileName = editor.FileName;
 
-			// save/set the directory, allow failures (e.g. a long path)
-			// note: GetDirectoryName fails on a long path, too
+		void GoToError(RuntimeException ex, bool redraw)
+		{
+			//! InvocationInfo null on CtrlC in prompts
+			if (ex.ErrorRecord.InvocationInfo is { } ii &&
+				string.Equals(fileName, ii.ScriptName, StringComparison.OrdinalIgnoreCase))
+			{
+				editor.GoTo(ii.OffsetInLine - 1, ii.ScriptLineNumber - 1);
+				if (redraw)
+					editor.Redraw();
+			}
+		}
+
+		try
+		{
+			// get tasks
+			var ps = A.Psf.NewPowerShell();
+			ps.AddScript("Invoke-Build ?? $args[0]").AddArgument(fileName);
+			var tasks = (OrderedDictionary)ps.Invoke()[0].BaseObject;
+
+			// find the caret task
+			var taskName = ".";
+			var lineIndex = editor.Caret.Y;
+			foreach (PSObject pso in tasks.Values)
+			{
+				var ii = (InvocationInfo)pso.Properties["InvocationInfo"].Value;
+				if (!string.Equals(fileName, ii.ScriptName, StringComparison.OrdinalIgnoreCase))
+					continue;
+
+				if ((ii.ScriptLineNumber - 1) > lineIndex)
+					break;
+
+				taskName = (string)pso.Properties["Name"].Value;
+			}
+
+			Far.Api.UI.ShowUserScreen();
 			try
 			{
-				dir1 = Path.GetDirectoryName(editor.FileName);
-				dir0 = Environment.CurrentDirectory;
-				Environment.CurrentDirectory = dir1;
-			}
-			catch (PathTooLongException)
-			{
-				// PowerShell is not able to invoke this script anyway, almost for sure
-				Far.Api.Message("The script path is too long.\rInvoking is not supported.");
-				return;
-			}
+				// invoke task
+				var args = new RunArgs("Invoke-Build $args[0] $args[1]")
+				{
+					Arguments = [taskName, fileName],
+					Writer = new ConsoleOutputWriter()
+				};
+				A.Psf.Run(args);
 
-			try
-			{
-				Far.Api.UI.WindowTitle = "Running...";
+				// on error in the editor script go to its position
+				//! do not redraw now or the editor is shown
+				if (args.Reason is RuntimeException ex)
+					GoToError(ex, false);
 
-				// push/set the location; let's ignore issues
-				A.Psf.Engine.SessionState.Path.PushCurrentLocation(null);
-				A.Psf.Engine.SessionState.Path.SetLocation(Kit.EscapeWildcard(dir1));
-
-				// invoke the script
-				A.Psf.Act("& '" + editor.FileName.Replace("'", "''") + "'", null, false);
-				Far.Api.UI.WindowTitle = "Done " + DateTime.Now;
-			}
-			catch
-			{
-				Far.Api.UI.WindowTitle = "Failed";
-				throw;
+				Far.Api.UI.SetProgressState(TaskbarProgressBarState.Paused);
+				Far.Api.UI.WindowTitle = "Press Esc to continue...";
+				while (true)
+				{
+					var key = Far.Api.UI.ReadKey(ReadKeyOptions.IncludeKeyDown | ReadKeyOptions.IncludeKeyUp);
+					if (key.VirtualKeyCode == KeyCode.Escape)
+						break;
+				}
+				Far.Api.UI.SetProgressState(TaskbarProgressBarState.NoProgress);
 			}
 			finally
 			{
-				// restore the directory first
-				Environment.CurrentDirectory = dir0;
-
-				// then pop the location, it may fail perhaps
-				A.Psf.Engine.SessionState.Path.PopLocation(null);
+				Far.Api.UI.SaveUserScreen();
 			}
 		}
-		// true if there is a solid char anywhere before the caret
-		internal static bool NeedsTabExpansion(IEditor editor)
+		catch (RuntimeException ex)
 		{
-			ILine line = editor.Line;
-			string text = line.Text;
-
-			int pos = line.Caret;
-            if (pos > text.Length)
-                return false;
-
-            while (--pos >= 0)
-				if (text[pos] > ' ')
-					return true;
-
-			return false;
+			// it is a build script issue more likely, go to its position and redraw, show the simple message
+			GoToError(ex, true);
+			Far.Api.Message(ex.Message, "Invoke-Build task", MessageOptions.Warning | MessageOptions.LeftAligned);
 		}
+	}
+
+	// true if there is a solid char anywhere before the caret
+	internal static bool NeedsTabExpansion(IEditor editor)
+	{
+		ILine line = editor.Line;
+		string text = line.Text;
+
+		int pos = line.Caret;
+		if (pos > text.Length)
+			return false;
+
+		while (--pos >= 0)
+			if (text[pos] > ' ')
+				return true;
+
+		return false;
 	}
 }

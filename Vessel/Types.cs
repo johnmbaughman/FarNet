@@ -3,83 +3,68 @@
 // Copyright (c) Roman Kuzmin
 
 using System;
-using System.Diagnostics;
-using System.Collections.Generic;
+using System.IO;
 
-namespace FarNet.Vessel
+namespace Vessel;
+
+public enum Mode
 {
-	public class Record
-	{
-		internal const string AGED = "aged";
-		internal const string EDIT = "edit";
-		internal const string OPEN = "open";
-		internal const string SAVE = "save";
-		internal const string VIEW = "view";
-		public DateTime Time { get; private set; }
-		public string What { get; private set; }
-		public string Path { get; private set; }
-		internal Record(DateTime time, string what, string path)
-		{
-			Time = time;
-			What = what;
-			Path = path;
-		}
-		public void SetAged()
-		{
-			What = AGED;
-		}
-	}
-	public class Result
-	{
-		public int Factor { get; set; }
-		public int UpCount { get; set; }
-		public int DownCount { get; set; }
-		public int SameCount { get; set; }
-		public int UpSum { get; set; }
-		public int DownSum { get; set; }
-		public int TotalSum
-		{
-			get { return UpSum - DownSum; }
-		}
-		public float Average
-		{
-			get
-			{
-				int count = UpCount + DownCount + SameCount;
-				return count == 0 ? 0 : (float)(UpSum - DownSum) / count;
-			}
-		}
-	}
-	public static class Logger
-	{
-		public static TraceSource Source { get { return _Source; } }
-		static readonly TraceSource _Source = new TraceSource("Vessel", SourceLevels.All);
-	}
-	static class Mat
-	{
-		/// <summary>
-		/// Gets the logarithm span of the value.
-		/// </summary>
-		public static int Span(double value)
-		{
-			if (value < 2) // base
-				return 0;
+	File,
+	Folder,
+	Command
+}
 
-			int result = 1;
-			int limit = 4; // base * base
-			while (value >= limit)
-			{
-				++result;
-				limit *= 2; // base
-			}
+public class Result
+{
+	/// <summary>
+	/// Number of wins.
+	/// </summary>
+	public int Score => UpCount - DownCount;
 
-			return result;
-		}
-	}
-	public class SpanSet
+	/// <summary>
+	/// Actual gain ~ average position win.
+	/// </summary>
+	public double Gain => Tests == 0 ? 0 : Math.Round((double)(UpSum - DownSum) / Tests, 2);
+
+	/// <summary>
+	/// Maximum possible gain ~ average position win.
+	/// </summary>
+	public double MaxGain => Tests == 0 ? 0 : Math.Round((double)MaxSum / Tests, 2);
+
+	public int UpCount { get; set; }
+	public int DownCount { get; set; }
+	public int UpSum { get; set; }
+	public int DownSum { get; set; }
+
+	/// <summary>
+	/// Total number of comparisons.
+	/// </summary>
+	public int Tests { get; set; }
+
+	/// <summary>
+	/// Maximum possible score.
+	/// </summary>
+	public int MaxScore { get; set; }
+
+	/// <summary>
+	/// Maximum possible gained sum.
+	/// </summary>
+	public int MaxSum { get; set; }
+}
+
+static class Lua
+{
+	public static string StringLiteral(string value)
 	{
-		readonly int[] _Spans = new int[Info.SpanCount];
-		public IList<int> Spans { get { return _Spans; } }
-		internal DateTime Time { get; set; }
+		value = value.Replace(@"\", @"\\").Replace(@"'", @"\'");
+		return $"'{value}'";
 	}
+}
+
+static class My
+{
+	public const string Name = "Vessel";
+	static string AppHome => Path.GetDirectoryName(typeof(My).Assembly.Location);
+	static string HelpRoot => "<" + AppHome + "\\>";
+	public static string HelpTopic(string topic) => HelpRoot + topic;
 }

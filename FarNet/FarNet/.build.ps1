@@ -1,28 +1,20 @@
-
 <#
 .Synopsis
-	Build script (https://github.com/nightroman/Invoke-Build)
+	Build script, https://github.com/nightroman/Invoke-Build
 #>
 
 param(
-	$Platform = (property Platform x64),
-	$Configuration = (property Configuration Release)
+	$FarHome = (property FarHome C:\Bin\Far\x64),
+	$Configuration = (property Configuration Release),
+	$TargetFramework = (property TargetFramework net8.0)
 )
-$FarHome = "C:\Bin\Far\$Platform"
 
-task Clean {
+task clean {
 	remove bin, obj
 }
 
-task Install {
-	$dir = "$FarHome\FarNet"
-	$null = mkdir $dir -Force
-	Copy-Item Bin\$Configuration\FarNet.dll $dir
-	if (Test-Path Bin\$Configuration\FarNet.xml) {
-		Copy-Item Bin\$Configuration\FarNet.xml $dir
-	}
-}
+task install
 
-task Uninstall {
+task uninstall {
 	remove $FarHome\FarNet\FarNet.dll, $FarHome\FarNet\FarNet.xml
 }

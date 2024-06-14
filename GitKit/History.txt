@@ -1,0 +1,310 @@
+﻿https://www.nuget.org/packages/FarNet.GitKit
+
+= 1.0.2 =
+
+LibGit2Sharp 0.30.0
+
+= 1.0.1 =
+
+LibGit2Sharp 0.29.0
+
+= 1.0.0 =
+
+Requires FarNet 8
+Uses LibGit2Sharp 0.28.0
+
+= 0.9.7 =
+
+Changes panel: Fix F4 on not committed modified.
+
+= 0.9.6 =
+
+Fix null reference in changes panel.
+
+= 0.9.5 =
+
+Fix not shown deleted file diff on F4.
+
+= 0.9.4 =
+
+Fix not shown deleted file diff.
+
+= 0.9.3 =
+
+Better error on staging directories containing repositories.
+
+= 0.9.2 =
+
+gk:status
+- New parameter ShowFiles.
+
+= 0.9.1 =
+
+Command parameters
+- Allow 1 and 0 for Boolean parameters.
+- Expand environment variables in Path parameters.
+
+= 0.9.0 =
+
+New command gk:blame
+- opens the file editor annotated with commits per line
+- [Enter] opens the changes panel for the caret commit
+
+gk:commits
+- new parameter IsGitPath
+
+= 0.8.6 =
+
+Add "Commit log" to common menu.
+
+gk:
+- Nothing or spaces after `gk:` show commands help.
+- To show status use `gk:status` instead of `gk:`.
+
+= 0.8.5 =
+
+Use topological order in commit log, resolve known cases.
+
+= 0.8.4 =
+
+Use first parent only in commit log.
+
+= 0.8.3 =
+
+Changes panel
+- Show commit info in title.
+- Menu "Commits" -> "Commit log"
+
+= 0.8.2 =
+
+Use FarNet 7.0.9
+
+Changes panel
+- Do not show renamed as new << old.
+
+= 0.8.1 =
+
+gk:
+- Print the head branch first.
+
+Commits panel
+- Cache slow path commits.
+
+= 0.8.0 =
+
+gk:commits
+- new parameter Path
+
+Changes panel
+- new menu "Commits"
+
+Commits panel
+- support path commits
+
+= 0.7.8 =
+
+gk:changes
+- New parameter Kind={NotCommitted|NotStaged|Staged|Head|Last}.
+- The default is Last: NotCommitted if any, or else Head (instead of empty panel).
+
+= 0.7.7 =
+
+New menu:
+- Edit file.
+
+gk:edit
+- Path is optional. Default: input dialog.
+
+= 0.7.6 =
+
+New command:
+- gk:edit
+
+gk:cd
+- Path may specify a file as well.
+
+= 0.7.5 =
+
+New command:
+- gk:cd
+
+= 0.7.4 =
+
+gk:
+- Handle unborn branches.
+
+Internal
+- Use simple module loading.
+
+= 0.7.3 =
+
+gk:
+- Fix for bare repository.
+
+gk:commit (amend)
+- Also show last commit changes in message editor.
+
+= 0.7.2 =
+
+Use credentials dialog by default, i.e. git is not used.
+Set UseGitCredentials to true for using git credentials.
+
+= 0.7.1 =
+
+- Show (no branch) on detached.
+- Tweaks for bare repositories.
+- Update panels on gk:checkout.
+
+= 0.7.0 =
+
+GitKit commands use new syntax:
+
+	gk:subcommand <parameters>
+
+New commands:
+
+	gk:pull
+	gk:push
+
+= 0.6.5 =
+
+Amend commits panel updates.
+
+= 0.6.4 =
+
+Menu
+- Add "Push branch" to commits panel.
+
+= 0.6.3 =
+
+Commits panel
+- Mark the "fork" commit
+- Setting CommitsPageLimit
+
+= 0.6.2 =
+
+Branches panel
+- Add "Select remote" menu.
+- Do not push with local changes.
+
+= 0.6.1 =
+
+Branches panel
+- Push branch: support not tracked branches.
+
+= 0.6.0 =
+
+Use git credential for remote tasks.
+
+New menu
+	Push branches
+
+Branches panel
+- Amend checkout remote branch: make new branch tracking.
+- Marks: `*` head, `r` remote, `=` tracked same as remote, `<` tracked older, `>` tracked newer.
+
+= 0.5.3 =
+
+Simplify repository factory.
+
+= 0.5.2 =
+
+Dispose repository to avoid file locks.
+
+= 0.5.1 =
+
+- LibGit2Sharp 0.27.2
+- Fix panel changes of the first commit
+
+= 0.5.0 =
+
+Module settings: F11 / FarNet / Settings / GitKit
+- DiffTool, DiffToolArguments
+- ShaPrefixLength
+
+VSCode is used as the default diff tool.
+
+= 0.4.0 =
+
+New command
+	gk: checkout=<branch>
+
+Allow safe delete of a branch if its tip exists in any other branch, not just local.
+
+= 0.3.2 =
+
+- Sort branches in status.
+- Add ahead / behind in status, if any.
+- Warning commentary on amending remote commits.
+
+= 0.3.1 =
+
+Fix cases of repository with no commits.
+
+= 0.3.0 =
+
+New menu "Merge branch".
+
+Show "origin/HEAD" branch.
+
+= 0.2.4 =
+
+Tweak status line format
+
+= 0.2.3 =
+
+Tweak errors and start of git.
+
+= 0.2.2 =
+
+Use git.exe to delete remote branches.
+
+= 0.2.1 =
+
+Delete remote branches is not yet supported.
+
+= 0.2.0 =
+
+New commands
+
+	gk:
+	- prints the repository status
+
+	gk: init=<path> ...
+	- creates a new repository
+
+	gk: clone=<url> ...
+	- clones the specified repository
+
+	gk: commit=<message> ...
+	- commits/amends staged/all changes
+
+= 0.1.0 =
+
+Add GitKit module menu in panels
+- Compare branches
+- Compare commits
+- Create branch
+
+= 0.0.3 =
+
+Branches panel:
+- ShiftF5 - clone the selected branch
+- F8, Del - safe delete local branches
+- ShiftF8, ShiftDel - delete remote and local branches
+
+= 0.0.2 =
+
+Requires FarNet 7.0.7
+
+Commits panel:
+- format as "hash date author: message"
+
+Changes panel:
+- update changes on [CtrlR]
+
+= 0.0.1 =
+
+- Branches panel
+- Commits panel
+- Changes panel

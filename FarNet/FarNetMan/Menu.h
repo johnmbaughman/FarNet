@@ -1,27 +1,25 @@
 
-/*
-FarNet plugin for Far Manager
-Copyright (c) 2006-2016 Roman Kuzmin
-*/
+// FarNet plugin for Far Manager
+// Copyright (c) Roman Kuzmin
 
 #pragma once
-#include "AnyMenu.h"
 
 namespace FarNet
-{;
-ref class Menu : public AnyMenu, public IMenu
+{
+ref class Menu : public Works::AnyMenu, public IMenu
 {
 public:
 	virtual property bool ReverseAutoAssign;
 	virtual property bool ChangeConsoleTitle;
+	virtual property bool NoBox;
+	virtual property bool NoMargin;
+	virtual property bool SingleBox;
 public:
 	~Menu();
 	!Menu();
 	virtual void Lock();
 	virtual bool Show() override;
 	virtual void Unlock();
-internal:
-	Menu();
 private:
 	FarMenuItem* CreateItems();
 	void DeleteItems(FarMenuItem* items);

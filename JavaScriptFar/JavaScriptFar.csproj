@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <FarHome Condition="'$(FarHome)' == ''">C:\Bin\Far\x64</FarHome>
+    <OutDir>$(FarHome)\FarNet\Modules\$(AssemblyName)</OutDir>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.ClearScript" Version="7.4.5" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="FarNet">
+      <HintPath>$(FarHome)\FarNet\FarNet.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

@@ -1,28 +1,34 @@
 
-/*
-FarNet plugin for Far Manager
-Copyright (c) 2006-2016 Roman Kuzmin
-*/
+// FarNet plugin for Far Manager
+// Copyright (c) Roman Kuzmin
 
 #include "stdafx.h"
 #include <initguid.h>
+#include "AssemblyResolver.h"
 #include "Active.h"
 #include "Dialog.h"
 #include "Editor0.h"
 #include "Far0.h"
-#include "Far1.h"
 #include "Panel0.h"
 #include "Viewer0.h"
 #include "UI.h"
 
+AppState g_AppState;
 PluginStartupInfo Info;
 static FarStandardFunctions FSF;
 
 // {10435532-9BB3-487B-A045-B0E6ECAAB6BC}
 DEFINE_GUID(MainGuid, 0x10435532, 0x9bb3, 0x487b, 0xa0, 0x45, 0xb0, 0xe6, 0xec, 0xaa, 0xb6, 0xbc);
 
+// {D2F36B62-A470-418d-83A3-ED7A3710E5B5}
+DEFINE_GUID(ColorerGuid, 0xd2f36b62, 0xa470, 0x418d, 0x83, 0xa3, 0xed, 0x7a, 0x37, 0x10, 0xe5, 0xb5);
+
 #define __START try {
-#define __END } catch(Exception^ e) { Far::Api->ShowError(nullptr, e); } finally { FarUI::ResetUserScreen(); }
+
+//! ResetUserScreen before the error dialog. The dialog may have the button [More].
+//! It opens the editor and Colorer shows its progress message on opening.
+//! This message stays and pollutes the user screen permanently.
+#define __END } catch(Exception^ e) { FarUI::ResetUserScreen(); Far::Api->ShowError(nullptr, e); } finally { FarUI::ResetUserScreen(); }
 
 void WINAPI GetGlobalInfoW(struct GlobalInfo* info)
 {
@@ -31,7 +37,7 @@ void WINAPI GetGlobalInfoW(struct GlobalInfo* info)
 	info->Guid = MainGuid;
 	info->Title = L"FarNet";
 	info->Author = L"Roman Kuzmin";
-	info->Description = L"FarNet module manager.";
+	info->Description = L"FarNet module manager";
 }
 
 /*
@@ -40,40 +46,25 @@ But more calls are possible, we have to ignore them.
 */
 void WINAPI SetStartupInfoW(const PluginStartupInfo* psi)
 {
-	Log::Source->TraceInformation(__FUNCTION__ "{");
-	try
-	{
-		// deny 2+ load
-		if (Works::Host::State != Works::HostState::None)
-		{
-			Far::Api->Message("FarNet cannot be loaded twice.", "FarNet", MessageOptions::Warning);
-			return;
-		}
+	// deny 2+ load
+	if (g_AppState != AppState::None)
+		return;
 
-		// loading
-		Works::Host::State = Works::HostState::Loading;
-
-		Far1::Connect();
+	// loading
+	g_AppState = AppState::Loading;
+	AssemblyResolver::Init();
 
 #ifdef TRACE_MEMORY
-		StartTraceMemory();
+	StartTraceMemory();
 #endif
 
-		Info = *psi;
-		FSF = *psi->FSF;
-		Info.FSF = &FSF;
+	Info = *psi;
+	FSF = *psi->FSF;
+	Info.FSF = &FSF;
 
-		__START;
-		Far0::Start();
-		__END;
-
-		// loaded
-		Works::Host::State = Works::HostState::Loaded;
-	}
-	finally
-	{
-		Log::Source->TraceInformation(__FUNCTION__ "}");
-	}
+	// load
+	Far0::Start();
+	g_AppState = AppState::Loaded;
 }
 
 /*
@@ -82,28 +73,21 @@ STOP: ensure it is "loaded".
 */
 void WINAPI ExitFARW(const ExitInfo*)
 {
-	Log::Source->TraceInformation(__FUNCTION__ "{");
+	if (g_AppState != AppState::Loaded)
+		return;
+
 	try
 	{
-		if (Works::Host::State == Works::HostState::Loaded)
-		{
-			// unloading
-			Works::Host::State = Works::HostState::Unloading;
-
-			// don't try/catch, Far can't help
-			Far0::Stop();
-
-			// unloaded
-			Works::Host::State = Works::HostState::Unloaded;
+		// don't try/catch, Far can't help
+		Far0::Stop();
 
 #ifdef TRACE_MEMORY
-			StopTraceMemory();
+		StopTraceMemory();
 #endif
-		}
 	}
 	finally
 	{
-		Log::Source->TraceInformation(__FUNCTION__ "}");
+		g_AppState = AppState::Unloaded;
 	}
 }
 
@@ -118,7 +102,7 @@ void WINAPI GetPluginInfoW(PluginInfo* pi)
 {
 	pi->Flags = PF_DIALOG | PF_EDITOR | PF_VIEWER | PF_FULLCMDLINE | PF_PRELOAD;
 
-	if (Works::Host::State != Works::HostState::Loaded)
+	if (g_AppState != AppState::Loaded)
 		return;
 
 	__START;
@@ -158,7 +142,7 @@ intptr_t WINAPI GetFilesW(GetFilesInfo* info)
 	return 0;
 }
 
-int WINAPI PutFilesW(PutFilesInfo* info)
+intptr_t WINAPI PutFilesW(PutFilesInfo* info)
 {
 	__START;
 	return Panel0::AsPutFiles(info);

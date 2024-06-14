@@ -1,8 +1,6 @@
 
-/*
-FarNet plugin for Far Manager
-Copyright (c) 2006-2016 Roman Kuzmin
-*/
+// FarNet plugin for Far Manager
+// Copyright (c) Roman Kuzmin
 
 #include "StdAfx.h"
 #include "Panel0.h"
@@ -271,6 +269,7 @@ static bool _reenterOnRedrawing;
 int Panel0::AsProcessPanelEvent(const ProcessPanelEventInfo* info)
 {
 	Panel2^ pp = HandleToPanel(info->hPanel);
+
 	switch(info->Event)
 	{
 	case FE_BREAK:
@@ -284,7 +283,13 @@ int Panel0::AsProcessPanelEvent(const ProcessPanelEventInfo* info)
 		{
 			Log::Source->TraceInformation("FE_CLOSE");
 
-			//_090321_165608 FE_CLOSE issues
+			// stop timer //_210630_hi
+			if (pp->_timerInstance)
+			{
+				delete pp->_timerInstance;
+				pp->_timerInstance = nullptr;
+			}
+
 			if (!pp->_Pushed)
 			{
 				PanelEventArgs e;
@@ -329,22 +334,6 @@ int Panel0::AsProcessPanelEvent(const ProcessPanelEventInfo* info)
 			pp->Host->UIViewChanged(%e);
 		}
 		break;
-	case FE_IDLE:
-		{
-			Log::Source->TraceEvent(TraceEventType::Verbose, 0, "FE_IDLE");
-
-			// 1) call
-			pp->Host->UIIdle();
-
-			// 2) update after the handler: if the panel has set both IdleUpdate and Idled
-			// then in Idled it should not care of data updates, it is done after that.
-			if (pp->Host->IdleUpdate)
-			{
-				pp->Update(true);
-				pp->Redraw();
-			}
-		}
-		break;
 	case FE_GOTFOCUS:
 		{
 			Log::Source->TraceEvent(TraceEventType::Verbose, 0, "FE_GOTFOCUS");
@@ -376,6 +365,10 @@ int Panel0::AsProcessPanelEvent(const ProcessPanelEventInfo* info)
 				return 0;
 			}
 
+			// start timer //_210630_hi
+			if (pp->Host->TimerInterval > 0 && !pp->_timerInstance)
+				pp->_timerInstance = gcnew Timer(gcnew TimerCallback(pp, &Panel2::OnTimer), nullptr, pp->Host->TimerInterval, pp->Host->TimerInterval);
+
 			PanelEventArgs e;
 			pp->Host->UIRedrawing(%e);
 			if (e.Ignore)
@@ -398,7 +391,7 @@ int Panel0::AsProcessPanelEvent(const ProcessPanelEventInfo* info)
 				pp->_postFile = nullptr;
 				pp->_postName = nullptr;
 
-				IList<FarFile^>^ files = pp->ShownList;
+				auto files = pp->Files;
 				for(int n = files->Count, i = pp->HasDots ? 1 : 0; i < n; ++i)
 				{
 					if (data->Equals(files[i]->Data))
@@ -420,7 +413,7 @@ int Panel0::AsProcessPanelEvent(const ProcessPanelEventInfo* info)
 				pp->_postFile = nullptr;
 				pp->_postName = nullptr;
 
-				IList<FarFile^>^ files = pp->ShownList;
+				auto files = pp->Files;
 				for(int n = files->Count, i = pp->HasDots ? 1 : 0; i < n; ++i)
 				{
 					if (name == files[i]->Name)
@@ -442,7 +435,7 @@ int Panel0::AsProcessPanelEvent(const ProcessPanelEventInfo* info)
 			FarFile^ file = pp->_postFile;
 			pp->_postFile = nullptr;
 
-			IList<FarFile^>^ files = pp->ShownList;
+			auto files = pp->Files;
 			for(int n = files->Count, i = pp->HasDots ? 1 : 0; i < n; ++i)
 			{
 				if (comparer->Equals(file, files[i]))
@@ -505,14 +498,16 @@ int Panel0::AsProcessPanelInput(const ProcessPanelInputInfo* info)
 
 IPanel^ Panel0::GetPanel(bool active)
 {
-	// get info and return null (e.g. Far started with /e or /v)
+	// get info, return null if no panel
 	PanelInfo pi;
 	if (!TryPanelInfo((active ? PANEL_ACTIVE : PANEL_PASSIVE), pi))
 		return nullptr;
 
+	// native panel?
 	if (0 == (pi.Flags & PFLAGS_PLUGIN))
 		return gcnew Panel1(active);
 
+	// module panel?
 	for (int i = 1; i < cPanels; ++i)
 	{
 		Panel2^ p = _panels[i];
@@ -520,6 +515,7 @@ IPanel^ Panel0::GetPanel(bool active)
 			return p->Host;
 	}
 
+	// plugin panel
 	return gcnew Panel1(true);
 }
 
@@ -607,23 +603,17 @@ void Panel0::OpenPanel(Panel2^ plugin)
 {
 	// plugin must be called for opening
 	if (_openMode == 0)
-		throw gcnew InvalidOperationException("Cannot open a panel because a module is not called for opening.");
+		throw gcnew InvalidOperationException("Cannot open panel, module is not called for opening.");
 
 	// only one panel can be opened at a time
 	if (_panels[0] && _panels[0] != plugin)
-		throw gcnew InvalidOperationException("Cannot open a panel because another panel is already waiting.");
+		throw gcnew InvalidOperationException("Cannot open panel, another panel is waiting.");
 
-	// panels window should be current
-	try
-	{
-		//_141017_151021
-		Far::Api->Window->SetCurrentAt(-1);
-	}
-	catch(InvalidOperationException^ e)
-	{
-		throw gcnew InvalidOperationException("Cannot open a panel because panels cannot be set current.", e);
-	}
+	// panels must be current at this point
+	if (Far::Api->Window->Kind != WindowKind::Panels)
+		throw gcnew InvalidOperationException("Cannot open panel, panels must be current.");
 
+	// set waiting panel
 	_panels[0] = plugin;
 }
 

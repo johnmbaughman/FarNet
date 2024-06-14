@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <FarHome Condition="'$(FarHome)' == ''">C:\Bin\Far\x64</FarHome>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="editorconfig" Version="0.15.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="FarNet">
+      <HintPath>$(FarHome)\FarNet\FarNet.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <Exec Command="ib publish -Configuration $(Configuration) -FarHome $(FarHome)" />
+  </Target>
+</Project>

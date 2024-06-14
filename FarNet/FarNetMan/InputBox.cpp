@@ -1,8 +1,6 @@
 
-/*
-FarNet plugin for Far Manager
-Copyright (c) 2006-2016 Roman Kuzmin
-*/
+// FarNet plugin for Far Manager
+// Copyright (c) Roman Kuzmin
 
 #include "StdAfx.h"
 #include "InputBox.h"
@@ -33,9 +31,6 @@ String^ InputBox::HelpTopic::get()
 
 void InputBox::HelpTopic::set(String^ value)
 {
-	if (SS(value) && !value->StartsWith("<"))
-		throw gcnew ArgumentException("'value' format must be '<FullPath\\>Topic'");
-
 	_HelpTopic = value;
 }
 

@@ -1,4 +1,3 @@
-
 <#
 .Synopsis
 	Computer inventory tools for Far Manager.
@@ -10,16 +9,12 @@
 	Gets uninstall records from the registry.
 
 .Description
-	This function returns information similar to the "Add or remove programs"
-	Windows tool. The function normally works much faster and gets some more
-	information.
+	This function returns information similar to "Add or remove programs".
+	It normally works much faster and gets some more information.
 
-	Another way to get installed products is: Get-WmiObject Win32_Product. But
-	this command is usually slow and it returns only products installed by
-	Windows Installer.
-
-	x64 notes. 32 bit process: this function does not get installed 64 bit
-	products. 64 bit process: this function gets both 32 and 64 bit products.
+	x64 notes:
+	32 bit process: it does not get 64 bit data
+	64 bit process: it gets both 32 and 64 bit data
 #>
 function Get-Uninstall
 {
@@ -46,15 +41,6 @@ function Get-Uninstall
 
 <#
 .Synopsis
-	Shows results of Get-Uninstall in a grid view.
-#>
-function Open-UninstallGridView
-{
-	Get-Uninstall | Out-GridView
-}
-
-<#
-.Synopsis
 	Shows results of Get-Uninstall in a panel.
 #>
 function Open-UninstallPanel
@@ -70,19 +56,11 @@ function Open-UninstallPanel
 <#
 .Synopsis
 	Shows services in a panel.
-
-.Description
-	This panel can be really useful, in particular it shows some information
-	not returned by the standard command Get-Service, for example service
-	startup types.
 #>
 function Open-ServicePanel
-(
-	$ComputerName = '.'
-)
 {
-	Get-WmiObject Win32_Service -ComputerName $ComputerName |
-	Out-FarPanel -HideMemberPattern '^_' @(
+	[System.Management.ManagementObjectSearcher]::new("SELECT * FROM Win32_Service").Get() |
+	Out-FarPanel @(
 		'Name'
 		'DisplayName'
 		@{ Expression = 'State'; Width = 9 }
@@ -100,12 +78,9 @@ function Open-ServicePanel
 	various locations: startup folders, registry run keys, and etc.
 #>
 function Open-StartupCommandPanel
-(
-	$ComputerName = '.'
-)
 {
-	Get-WmiObject Win32_StartupCommand -ComputerName $ComputerName |
-	Out-FarPanel -HideMemberPattern '^_' @(
+	[System.Management.ManagementObjectSearcher]::new("SELECT * FROM Win32_StartupCommand").Get() |
+	Out-FarPanel @(
 		'Name'
 		'Command'
 		'Location'
@@ -121,9 +96,6 @@ function Open-StartupCommandPanel
 	The panel shows local disks and their information.
 #>
 function Open-LogicalDiskPanel
-(
-	$ComputerName = '.'
-)
 {
 	$GetDriveType = {
 		switch($_.DriveType) {
@@ -137,8 +109,8 @@ function Open-LogicalDiskPanel
 		}
 	}
 
-	Get-WmiObject Win32_LogicalDisk -ComputerName $ComputerName |
-	Out-FarPanel -HideMemberPattern '^_' @(
+	[System.Management.ManagementObjectSearcher]::new("SELECT * FROM Win32_LogicalDisk").Get() |
+	Out-FarPanel @(
 		@{ Expression = 'Name'; Width = 8 }
 		'Description'
 		@{ Name = 'FS'; Expression = 'FileSystem'; Width = 8 }
@@ -159,19 +131,16 @@ function Open-LogicalDiskPanel
 		Win32_OperatingSystem
 #>
 function Open-InventoryPanel
-(
-	$ComputerName = '.'
-)
 {
 	.{
-		Get-WmiObject Win32_ComputerSystem -ComputerName $ComputerName
-		Get-WmiObject Win32_Baseboard -ComputerName $ComputerName
-		Get-WmiObject Win32_BIOS -ComputerName $ComputerName
-		Get-WmiObject Win32_OperatingSystem -ComputerName $ComputerName
+		[System.Management.ManagementObjectSearcher]::new("SELECT * FROM Win32_ComputerSystem").Get()
+		[System.Management.ManagementObjectSearcher]::new("SELECT * FROM Win32_Baseboard").Get()
+		[System.Management.ManagementObjectSearcher]::new("SELECT * FROM Win32_BIOS").Get()
+		[System.Management.ManagementObjectSearcher]::new("SELECT * FROM Win32_OperatingSystem").Get()
 	} |
-	Out-FarPanel -HideMemberPattern '^_' @(
-		@{ Name = 'Class'; Expression = '__CLASS' }
+	Out-FarPanel @(
 		'Name'
+		@{ Name = 'Class'; Expression = '__CLASS' }
 	)
 }
 
@@ -179,15 +148,25 @@ function Open-InventoryPanel
 .Synopsis
 	Shows environment variables in a panel.
 #>
-function Open-EnvironmentPanel
-(
-	$ComputerName = '.'
-)
-{
-	Get-WmiObject Win32_Environment -ComputerName $ComputerName |
-	Out-FarPanel -HideMemberPattern '^_' @(
+function Open-EnvironmentPanel {
+	[CmdletBinding()]
+	param(
+		[switch]$System,
+		[switch]$User
+	)
+
+	$r = [System.Management.ManagementObjectSearcher]::new("SELECT * FROM Win32_Environment").Get()
+	if ($System) {
+		$r = $r | .{process{ if ($_.SystemVariable) {$_} }}
+	}
+	elseif ($User) {
+		$userName = "$([System.Environment]::UserDomainName)\$([System.Environment]::UserName)"
+		$r = $r | .{process{ if ($_.UserName -eq $userName) {$_} }}
+	}
+
+	$r | Out-FarPanel -SortMode Name @(
 		'Name'
+		if (!$System -and !$User) {'UserName'}
 		@{ Name = 'Value'; Expression = 'VariableValue' }
-		'UserName'
 	)
 }

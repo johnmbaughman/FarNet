@@ -1,34 +1,34 @@
 
-/*
-PowerShellFar module for Far Manager
-Copyright (c) 2006-2016 Roman Kuzmin
-*/
+// PowerShellFar module for Far Manager
+// Copyright (c) Roman Kuzmin
 
-using System.Management.Automation;
 using FarNet;
+using System.Management.Automation;
 
-namespace PowerShellFar.Commands
+namespace PowerShellFar.Commands;
+
+[OutputType(typeof(IViewer))]
+class NewFarViewerCommand : BaseTextCmdlet
 {
-	class NewFarViewerCommand : BaseTextCmdlet
+	[Parameter(Position = 0, Mandatory = true, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true)]
+	[Alias("FilePath", "FileName")]
+	public string Path { get; set; } = null!;
+
+	internal IViewer CreateViewer()
 	{
-		[Parameter(Position = 0, Mandatory = true, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true)]
-		[Alias("FilePath", "FileName")]
-		public string Path { get; set; }
-		internal IViewer CreateViewer()
-		{
-			IViewer viewer = Far.Api.CreateViewer();
-			viewer.DeleteSource = DeleteSource;
-			viewer.DisableHistory = DisableHistory;
-			viewer.FileName = GetUnresolvedProviderPathFromPSPath(Path);
-			viewer.Switching = Switching;
-			viewer.Title = Title;
-			if (CodePage >= 0)
-				viewer.CodePage = CodePage;
-			return viewer;
-		}
-		protected override void ProcessRecord()
-		{
-			WriteObject(CreateViewer());
-		}
+		var viewer = Far.Api.CreateViewer();
+		viewer.DeleteSource = DeleteSource;
+		viewer.DisableHistory = DisableHistory;
+		viewer.FileName = GetUnresolvedProviderPathFromPSPath(Path);
+		viewer.Switching = Switching;
+		viewer.Title = Title;
+		if (CodePage >= 0)
+			viewer.CodePage = CodePage;
+		return viewer;
+	}
+
+	protected override void ProcessRecord()
+	{
+		WriteObject(CreateViewer());
 	}
 }

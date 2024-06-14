@@ -1,13 +1,12 @@
 
-/*
-FarNet plugin for Far Manager
-Copyright (c) 2006-2016 Roman Kuzmin
-*/
+// FarNet plugin for Far Manager
+// Copyright (c) Roman Kuzmin
 
 #pragma once
 
 namespace FarNet
 {;
+// Far::Api instance.
 ref class Far1 sealed : IFar
 {
 public:
@@ -37,43 +36,29 @@ public:
 	virtual IModuleManager^ GetModuleManager(String^ name) override;
 	virtual IViewer^ CreateViewer() override;
 	virtual String^ GetFolderPath(SpecialFolder folder) override;
-	virtual Works::IPanelWorks^ WorksPanel(FarNet::Panel^ panel, Explorer^ explorer) override;
 public:
 	virtual array<FarNet::Panel^>^ Panels(Guid typeId) override;
 	virtual array<FarNet::Panel^>^ Panels(Type^ type) override;
 	virtual array<IEditor^>^ Editors() override;
 	virtual array<IViewer^>^ Viewers() override;
-	virtual bool IsMaskMatch(String^ path, String^ mask) override;
+	virtual bool IsMaskMatch(String^ path, String^ mask, bool full) override;
 	virtual bool IsMaskValid(String^ mask) override;
 	virtual CultureInfo^ GetCurrentUICulture(bool update) override;
 	virtual IModuleAction^ GetModuleAction(Guid id) override;
 	virtual int Message(MessageArgs^ args) override;
 	virtual KeyInfo^ NameToKeyInfo(String^ key) override;
 	virtual Object^ GetSetting(FarSetting settingSet, String^ settingName) override;
-	[MethodImpl(MethodImplOptions::NoInlining)]
-	virtual String^ GetHelpTopic(String^ topic) override;
 	virtual String^ Input(String^ prompt, String^ history, String^ title, String^ text) override;
 	virtual String^ KeyInfoToName(KeyInfo^ key) override;
 	virtual String^ PasteFromClipboard() override;
-	virtual String^ TempFolder(String^ prefix) override;
 	virtual String^ TempName(String^ prefix) override;
 	virtual void CopyToClipboard(String^ text) override;
+	virtual void InvokeCommand(String^ command) override;
 	virtual void PostJob(Action^ handler) override;
 	virtual void PostMacro(String^ macro, bool enableOutput, bool disablePlugins) override;
-	virtual void PostSteps(IEnumerable<Object^>^ steps) override;
+	virtual void PostStep(Action^ step) override;
 	virtual void Quit() override;
 	virtual void ShowError(String^ title, Exception^ error) override;
 	virtual void ShowHelp(String^ path, String^ topic, HelpOptions options) override;
-	[MethodImpl(MethodImplOptions::NoInlining)]
-	virtual void ShowHelpTopic(String^ topic) override;
-internal:
-	static void Connect();
-private:
-	Far1() {}
-	// Instance
-	static Far1 Far;
-	// Paths
-	static String^ _LocalData;
-	static String^ _RoamingData;
 };
 }

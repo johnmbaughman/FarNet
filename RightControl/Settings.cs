@@ -1,25 +1,45 @@
 ﻿
-/*
-FarNet module RightControl
-Copyright (c) 2010-2016 Roman Kuzmin
-*/
+// FarNet module RightControl
+// Copyright (c) Roman Kuzmin
 
-using System.Configuration;
-using FarNet.Settings;
+using System;
+using System.Text.RegularExpressions;
 
-namespace FarNet.RightControl
+namespace FarNet.RightControl;
+
+public sealed class Settings : ModuleSettings<Settings.Data>
 {
-	[SettingsProvider(typeof(ModuleSettingsProvider))]
-	public sealed class Settings : ModuleSettings
+	public static Settings Default { get; } = new Settings();
+
+	public class Data : IValidate
 	{
-		internal const string RegexDefault = @"^ | $ | (?<=\b|\s)\S";
-		[UserScopedSetting]
-		[DefaultSettingValue(RegexDefault)]
-		[SettingsManageability(SettingsManageability.Roaming)]
-		public string Regex
+		public XmlCData RegexLeft { get; set; } = @"(?x: ^ | $ | (?<=\b|\s)\S )";
+
+		public XmlCData RegexRight { get; set; } = @"(?x: ^ | $ | (?<=\b|\s)\S )";
+
+		internal Regex RegexLeft2 { get; private set; }
+
+		internal Regex RegexRight2 { get; private set; }
+
+		public void Validate()
 		{
-			get { return (string)this["Regex"]; }
-			set { this["Regex"] = value; }
+			try
+			{
+				RegexLeft2 = new Regex(RegexLeft);
+			}
+			catch (Exception ex)
+			{
+				throw new ModuleException($"RegexLeft: {ex.Message}", ex);
+			}
+
+			try
+			{
+				RegexRight2 = new Regex(RegexRight);
+			}
+			catch (Exception ex)
+			{
+				throw new ModuleException($"RegexRight: {ex.Message}", ex);
+			}
 		}
 	}
 }

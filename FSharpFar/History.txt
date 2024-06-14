@@ -1,7 +1,417 @@
-
 https://www.nuget.org/packages/FarNet.FSharpFar
-Far Manager 3.0.5048
-FarNet 5.2.18
+
+= 4.0.1 =
+
+FSharp.Core 8.0.200
+FSharp.Compiler.Service 43.8.200
+
+= 4.0.0 =
+
+Requires .NET 8.0, FarNet 8.0.0
+
+Keep several open sessions again.
+
+= 3.1.1 =
+
+FSharp.Core 7.0.401
+FSharp.Compiler.Service 43.7.401
+
+= 3.1.0 =
+
+FSharp.Core 7.0.400
+FSharp.Compiler.Service 43.7.400
+Temporary, just one active session is kept open.
+
+= 3.0.1 =
+
+master -> main, update links.
+
+= 3.0.0 =
+
+Requires FarNet 7, uses .NET 7.
+FSharp.Core 7.0.0
+FSharp.Compiler.Service 42.7.101
+
+= 2.0.14 =
+
+Throw exceptions from `fs:` commands instead of writing to console.
+Otherwise callers cannot know about failures (API, interop, tests).
+
+= 2.0.13 =
+
+Build as simple module, ALC loading is bad for data providers.
+As a result, FarNet.FSharp.Data is back to normal.
+
+= 2.0.12 =
+
+Retired `fs://command` format, use `fs:command:` instead.
+
+`fs: compile` and `fs: project:` -- if the configuration section `[out]`
+is missing or omits `-o|--out` then the FarNet script location is assumed.
+
+= 2.0.11 =
+
+Requires FarNet 6.0.19
+
+Changed format of fs: commands:
+New format: fs: command: ...
+Old format: fs: //command ...
+
+	The old format still works but will be retired.
+
+Engaged new FarNet "scripts", replaced old menu items "Project" with new command:
+fs: project: open=VS|VSCode; type=Normal|Script; with=<config>
+
+	The command provides more options, ability to specify
+	the location, and ability to call not just from panels.
+
+	Old menu items covered only VS|VSCode in panels.
+	If you need them, make user menu items instead:
+
+		fs: project: open=VS
+		fs: project: open=VSCode
+
+= 2.0.10 =
+
+FSharp.Core 6.0.6
+FSharp.Compiler.Service 41.0.6
+
+= 2.0.9 =
+
+Requires FarNet 6.0.14
+
+Interactive:
+- history navigation by up/down arrows in the last line
+- the key for show history changed from F6 to F5
+- uses temp files deleted after use
+- saves automatically on output
+
+= 2.0.8 =
+
+fsx: Assembly resolver: use LoadFrom, not LoadFile.
+
+= 2.0.7 =
+
+Requires FarNet 6.0.6
+- Use new module item ids.
+- Build as ALC module (see FarNet 6.0.6).
+
+= 2.0.6 =
+
+fsx - Tweak assembly resolver.
+
+= 2.0.5 =
+
+Add assembly resolver to fsx, similar to used in FarNet.
+E.g. fsx can run scripts using FarNet.FSharp.PowerShell.
+
+= 2.0.4 =
+
+Removed not useful "No errors" message.
+AutoTips and AutoCheck are saved in local settings.
+
+Fixed checker issues by --targetprofile:netcore.
+Added --nowarn:FS3511, top level tasks are good.
+
+Generated VSCode use "coreclr" instead of "clr".
+
+= 2.0.3 =
+
+- Avoid duplicated checker errors.
+- Do not show operation canceled errors.
+- Add `AutoCheck` (false) to the module settings.
+F# checker is confused in net6.0, work in progress.
+
+= 2.0.2 =
+
+Include missing FSharp.Core.xml
+
+= 2.0.1 =
+
+fsx.exe supports WinForms.
+E.g. fsx may run scripts using FarNet.FSharp.Charting.
+
+= 2.0.0 =
+
+FarNet 6 announcement -- https://github.com/nightroman/FarNet/pull/25
+
+Requires FarNet 6, uses .NET 6.
+FSharp.Compiler.Service 41.0.5
+
+= 1.17.2 =
+
+Requires FarNet 5.9.0
+
+Updated FSharp.Compiler.Service (41.0.4) FSharp.Core (6.0.4)
+
+= 1.17.1 =
+
+Requires FarNet 5.8.4
+
+Updated FSharp.Compiler.Service (41.0.3) FSharp.Core (6.0.3)
+
+= 1.17.0 =
+
+Requires FarNet 5.6.0.
+Uses new XML settings.
+Remove old %FARPROFILE%\FarNet\FSharpFar\Settings.resources
+
+= 1.16.3 =
+
+Ignore configuration options -a and --target and always use --target:library.
+
+= 1.16.2 =
+
+Fix existing (System.Text.Json) and potential assembly conflicts:
+- Amend packaged assemblies (net4* instead of netstandard2.0)
+- Add System.Numerics.Vectors.dll
+
+= 1.16.1 =
+
+Respect the configuration section [out] by the Project commands.
+As a result, you can build, run, debug FarNet modules on the fly.
+
+	Example: https://github.com/nightroman/FarNet/tree/main/FSharpFar/samples/TryPanelFSharp
+
+Engage F# v6 features in samples and tests.
+
+	If you use Visual Studio, 2022 is recommended for working with sources.
+	VS 2019 with the old F# compiler may not recognise some new syntax.
+	(reminder: VS is not needed for running F# script in FSF)
+
+Associate .fsproj with Visual Studio 2022
+
+	On problems with associating .fsproj files with Visual Studio 2022, use this registry tweak:
+
+		HKEY_CLASSES_ROOT\fsproj_auto_file\shell\open\command
+		"C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\devenv.exe" "%1"
+
+= 1.16.0 =
+
+F# v6, new features
+Requires FarNet 5.5.2
+Updated FSharp.Compiler.Service (41.0.1), FSharp.Core (6.0.1)
+
+= 1.15.1 =
+
+Updated FSharp.Compiler.Service (40.0), FSharp.Core (5.0.2).
+
+= 1.15.0 =
+
+!! Use FarNet 5.4.20
+
+Updated FSharp.Compiler.Service (39.0). This includes FSharp.Core 5.0.1 with
+new F# 5 features.
+
+Note, script debugging is not supported at the moment:
+https://github.com/dotnet/fsharp/issues/10467#issuecomment-774820154
+
+= 1.14.0 =
+
+Use FarNet 5.4.13 with new FarNet.Tasks.
+
+Renamed Job to Jobs and redesigned it.
+Most of methods are wrappers of Tasks.
+
+= 1.13.6 =
+
+Internal
+- Job: remove excessive EnsurePanels
+- simplify Job.OpenPanel (Panel/fun)
+
+= 1.13.5 =
+
+Move Wait() from Job to Assert.
+Make Job Keys, Macro, Wait lazy.
+
+= 1.13.4 =
+
+Use "net472" in generated F# projects.
+Use FarNet.Tasks for Job.Keys and Macro.
+
+= 1.13.3 =
+
+- Replace StartTaskCode and StartTaskFile with StartTask
+- Add the parameter `parameters` to StartTask
+
+= 1.13.2 =
+
+Add FarNet.FSharp.PSFar StartTaskCode and StartTaskFile for invoking
+PowerShellFar scripts asynchronously by Start-FarTask.
+
+= 1.13.1 =
+
+Add missing Microsoft.Build.*.dll
+Remove not used ValueTuple.dll
+
+= 1.13.0 =
+
+FSharp.Compiler.Service (37.0)
+*** Requires net472 ***
+
+= 1.12.0 =
+
+FaNet.FSharp namespace changes
+
+	Converted PowerShellFar module to PSFar static type
+	-- New property Runspace (latest PowerShellFar)
+	-- Solved conflicts on -r:PowerShellFar.dll
+	-- Renamed invokeScript to Invoke
+
+	Added experimental trace {} with printing yield.
+	Note, implicit yield is supported and handy.
+
+	Experimental auto opening of FarNet.FSharp.
+
+= 1.11.4 =
+
+Amend disabling/enabling editor auto checks.
+
+= 1.11.3 =
+
+Support printf* in async jobs.
+
+= 1.11.2 =
+
+Remove FSharp.Core.optdata, FSharp.Core.sigdata from the package.
+Move tests from /sample/Async to /tests.
+Add Assert.Throws()
+
+= 1.11.1 =
+
+Add the common test runner and use in samples.
+
+= 1.11.0 =
+
+Add basic test tools. See /samples/Testing.
+
+= 1.10.8 =
+
+Script debugging support, see README.
+
+= 1.10.7 =
+
+FSharp.Compiler.Service (36.0.3)
+
+Do not run scripts if session loading has critical errors.
+
+= 1.10.6 =
+
+Add watchers on starting "Project" menu commands for closing sessions
+automatically on related file changes.
+
+= 1.10.5 =
+
+FSharp.Compiler.Service (36.0.2)
+(fixed versions in fsx.exe logo)
+
+Close affected sessions on saving config and source files in Far Manager.
+
+Session loading exceptions - throw with the original stack information.
+
+= 1.10.4 =
+
+Added FSharp.Core.xml to the package.
+This makes F# core help tips available.
+
+= 1.10.3 =
+
+FSharp.Compiler.Service (36.0.1)
+
+Amend command line parsing in fsx.exe.
+
+= 1.10.2 =
+
+Add missing assembly to the package.
+
+= 1.10.1 =
+
+FSharp.Compiler.Service (36.0)
+
+- Added "Improve performance" to README.
+- Amended fsx.exe config file resolution.
+- Improved error message on config issues.
+- Fixed GAC references in generated projects.
+
+= 1.10.0 =
+
+The package includes fsx.exe for running scripts without starting Far Manager.
+As a result, FSharpFar package provides the complete F# scripting tool set.
+See README "Using fsx.exe tool" and "repo/samples/fsx-sample".
+
+The interactive session configuration object `fsi` is available for scripts.
+Use it for customization and for `fsi.CommandLineArgs` in fsx.exe or fsi.exe.
+
+The compiler symbol FARNET is defined for scripts loaded by FSharpFar.
+It is used for conditional compilation to separate FarNet | non-FarNet.
+
+= 1.9.21 =
+
+"Project" commands: generated projects include *.fsx scripts.
+
+= 1.9.20 =
+
+- FSharp.Core 4.7.2
+- complete __SOURCE_DIRECTORY__
+- fix order of included use section items
+
+= 1.9.19 =
+
+FSharp.Compiler.Service (35.0)
+
+= 1.9.18 =
+
+FSharp.Core (4.7.1)
+
+= 1.9.17 =
+
+FSharp.Compiler.Service (34.1.1)
+
+= 1.9.16 =
+
+FSharp.Compiler.Service (34.1)
+
+= 1.9.15 =
+
+FSharp.Compiler.Service (34.0.1)
+
+= 1.9.14 =
+
+New menu command "Project (VSCode)".
+
+= 1.9.13 =
+
+FSharp.Compiler.Service (34.0)
+
+= 1.9.12 =
+
+FSharp.Compiler.Service (33.0.1)
+
+= 1.9.12 =
+
+Tweak generated project directory names in %TEMP%.
+
+= 1.9.11 =
+
+FSharp.Compiler.Service (33.0)
+
+= 1.9.10 =
+
+FSharp.Compiler.Service (32.0)
+- supports new F# 4.7 syntax features
+- preview features are enabled by `--langversion:preview` in [fsc] configuration sections
+
+= 1.9.9 =
+
+FSharp.Compiler.Service (31.0)
+
+= 1.9.8 =
+
+FSharp.Core (4.7), requires FarNet 5.2.20
+
+= 1.9.7 =
+
+FSharp.Compiler.Service (30.0)
 
 = 1.9.6 =
 

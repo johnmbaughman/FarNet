@@ -1,5 +1,58 @@
+https://www.nuget.org/packages/FarNet.Explore
 
-NuGet package: https://www.nuget.org/packages/FarNet.Explore
+= 5.1.1 =
+
+Requires FarNet 8.1.4
+
+New parameter -Exclude
+
+= 5.1.0 =
+
+Requires FarNet 8.1.0
+
+The `explore:` command
+- without parameters opens the file system explorer panel
+- without module panel uses the file system explorer
+- recursive by default, use -Depth to control
+- new parameter -Bfs for breadth-first-search
+
+= 5.0.0 =
+
+Requires FarNet 8
+
+= 4.0.2 =
+
+Parameters
+-Directory: get only directories
+-File: get only files
+
+= 4.0.1 =
+
+master -> main, update links.
+
+= 4.0.0 =
+
+Requires FarNet 7, uses .NET 7.
+
+= 3.0.1 =
+
+Use latest FarNet.
+
+= 3.0.0 =
+
+Requires FarNet 6, uses .NET 6.
+
+= 2.1.4 =
+
+Use netstandard2.0
+
+= 2.1.3 =
+
+Maintenance.
+
+= 2.1.2 =
+
+Minor tweaks.
 
 = 2.1.1 =
 

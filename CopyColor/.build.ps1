@@ -1,87 +1,109 @@
-
 <#
 .Synopsis
-	Build script (https://github.com/nightroman/Invoke-Build)
+	Build script, https://github.com/nightroman/Invoke-Build
 #>
 
 param(
-	$Platform = (property Platform x64)
+	$Configuration = (property Configuration Release),
+	$FarHome = (property FarHome C:\Bin\Far\x64)
 )
-$FarHome = "C:\Bin\Far\$Platform"
-$ModuleHome = "$FarHome\FarNet\Modules\CopyColor"
 
-task . Build, Clean
+Set-StrictMode -Version 3
+$ModuleName = 'CopyColor'
+$ModuleRoot = "$FarHome\FarNet\Modules\$ModuleName"
+$Description = 'Copy editor text with colors as HTML. FarNet module for Far Manager.'
 
-# Build and install
-task Build {
-	Set-Alias MSBuild (Resolve-MSBuild)
-	exec { MSBuild CopyColor.csproj /p:Configuration=Release /p:FarHome=$FarHome }
+task build meta, {
+	exec { dotnet build -c $Configuration /p:FarHome=$FarHome }
 }
 
-# New About-CopyColor.htm
-task Help {
-	exec { MarkdownToHtml "From = About-CopyColor.text; To = About-CopyColor.htm" }
+task publish {
+	$null = mkdir $ModuleRoot -Force
+	Copy-Item -Destination $ModuleRoot @(
+		"bin\$Configuration\net8.0-windows\$ModuleName.dll"
+		"bin\$Configuration\net8.0-windows\$ModuleName.pdb"
+	)
 }
 
-task Clean {
-	remove z, bin, obj, About-CopyColor.htm, FarNet.CopyColor.*.nupkg
+task clean {
+	remove z, bin, obj, README.htm, FarNet.$ModuleName.*.nupkg
 }
 
-task Version {
-	$dll = Get-Item -LiteralPath $ModuleHome\CopyColor.dll
-	assert ($dll.VersionInfo.FileVersion -match '^(\d+\.\d+\.\d+)\.0$')
-	($script:Version = $matches[1])
+task version {
+	($script:Version = switch -regex -file History.txt {'^= (\d+\.\d+\.\d+) =$' {$matches[1]; break}})
+	assert $script:Version
 }
 
-task Package Help, {
-	$toModule = 'z\tools\FarHome\FarNet\Modules\CopyColor'
+task meta -Inputs .build.ps1, History.txt -Outputs Directory.Build.props version, {
+	Set-Content Directory.Build.props @"
+<Project>
+  <PropertyGroup>
+    <Company>https://github.com/nightroman/FarNet</Company>
+    <Copyright>Copyright (c) Roman Kuzmin</Copyright>
+    <Product>FarNet.$ModuleName</Product>
+    <Version>$Version</Version>
+    <Description>$Description</Description>
+  </PropertyGroup>
+</Project>
+"@
+}
+
+task markdown {
+	assert (Test-Path $env:MarkdownCss)
+	exec {
+		pandoc.exe @(
+			'README.md'
+			'--output=README.htm'
+			'--from=gfm'
+			'--embed-resources'
+			'--standalone'
+			"--css=$env:MarkdownCss"
+			"--metadata=pagetitle:$ModuleName"
+		)
+	}
+}
+
+task package markdown, version, {
+	equals "$Version.0" (Get-Item $ModuleRoot\$ModuleName.dll).VersionInfo.FileVersion
+	$toModule = "z\tools\FarHome\FarNet\Modules\$ModuleName"
 
 	remove z
 	$null = mkdir $toModule
 
-	Copy-Item -Destination $toModule `
-	About-CopyColor.htm,
-	History.txt,
-	LICENSE.txt,
-	$ModuleHome\CopyColor.dll
+	Copy-Item -Destination z @(
+		'README.md'
+		'..\Zoo\FarNetLogo.png'
+	)
+
+	Copy-Item -Destination $toModule @(
+		'README.htm'
+		'History.txt'
+		'..\LICENSE'
+		"$ModuleRoot\$ModuleName.dll"
+	)
 }
 
-task NuGet Package, Version, {
-	$text = @'
-CopyColor is the FarNet module for Far Manager.
-
-It copies selected text with colors from the editor to the clipboard
-using HTML clipboard format. This text can be pasted into Microsoft
-Word, Outlook, and some other editors.
-
----
-
-To install FarNet packages, follow these steps:
-
-https://raw.githubusercontent.com/nightroman/FarNet/master/Install-FarNet.en.txt
-
----
-'@
-	# nuspec
+task nuget package, version, {
 	Set-Content z\Package.nuspec @"
 <?xml version="1.0"?>
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
 	<metadata>
-		<id>FarNet.CopyColor</id>
+		<id>FarNet.$ModuleName</id>
 		<version>$Version</version>
 		<owners>Roman Kuzmin</owners>
 		<authors>Roman Kuzmin</authors>
-		<projectUrl>https://github.com/nightroman/FarNet</projectUrl>
-		<iconUrl>https://raw.githubusercontent.com/wiki/nightroman/FarNet/images/FarNetLogo.png</iconUrl>
-		<licenseUrl>https://raw.githubusercontent.com/nightroman/FarNet/master/CopyColor/LICENSE.txt</licenseUrl>
-		<requireLicenseAcceptance>false</requireLicenseAcceptance>
-		<summary>$text</summary>
-		<description>$text</description>
-		<releaseNotes>https://raw.githubusercontent.com/nightroman/FarNet/master/CopyColor/History.txt</releaseNotes>
-		<tags>FarManager FarNet Module</tags>
+		<license type="expression">BSD-3-Clause</license>
+		<icon>FarNetLogo.png</icon>
+		<readme>README.md</readme>
+		<projectUrl>https://github.com/nightroman/FarNet/tree/main/CopyColor</projectUrl>
+		<description>$description</description>
+		<releaseNotes>https://github.com/nightroman/FarNet/blob/main/CopyColor/History.txt</releaseNotes>
+		<tags>FarManager FarNet Module HTML Clipboard</tags>
 	</metadata>
 </package>
 "@
-	# pack
-	exec { NuGet pack z\Package.nuspec -NoPackageAnalysis }
+
+	exec { NuGet.exe pack z\Package.nuspec }
 }
+
+task . build, clean

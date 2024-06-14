@@ -1,8 +1,6 @@
 
-/*
-FarNet plugin for Far Manager
-Copyright (c) 2006-2016 Roman Kuzmin
-*/
+// FarNet plugin for Far Manager
+// Copyright (c) Roman Kuzmin
 
 #pragma once
 
@@ -203,6 +201,7 @@ struct SEditorSetPosition : EditorSetPosition
 };
 
 // Far API wrappers
+void ThrowEditorLocked(intptr_t editorId);
 void EditorControl_ECTL_DELETEBLOCK(intptr_t editorId);
 void EditorControl_ECTL_DELETECHAR(intptr_t editorId);
 void EditorControl_ECTL_DELETESTRING(intptr_t editorId);
@@ -260,30 +259,14 @@ internal:
 		EditorNoSelection = "There is no selection.",
 		EditorBadSelection = "This kind of selection is not supported.";
 };
-
-ref class Configuration
-{
-public:
-	static ConstString
-		Modules = "FarNet:FarManager:Modules",
-		DisableGui = "FarNet:FarManager:DisableGui";
-public:
-	static bool GetBool(String^ key);
-	static String^ GetString(String^ key);
-};
-
 }
 
 // Helpers
-int Compare(String^ strA, String^ strB);
 int ParseInt(String^ value, int fallback);
 KeyInfo^ KeyInfoFromInputRecord(const INPUT_RECORD& ir);
 MouseInfo^ GetMouseInfo(const MOUSE_EVENT_RECORD& m);
-String^ JoinText(String^ head, String^ tail);
-String^ Wildcard(String^ pattern);
 void AssertCurrentViewer();
 void DeleteSourceOptional(String^ path, DeleteSource option);
-void ValidateRect(int& x, int& w, int min, int size);
 void SetPanelDirectory(HANDLE handle, String^ path);
 void Call_ACTL_GETWINDOWINFO(WindowInfo& wi, int index);
 void Call_ACTL_GETWINDOWINFO(WindowInfo& wi);

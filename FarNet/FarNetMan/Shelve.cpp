@@ -1,8 +1,6 @@
 
-/*
-FarNet plugin for Far Manager
-Copyright (c) 2006-2016 Roman Kuzmin
-*/
+// FarNet plugin for Far Manager
+// Copyright (c) Roman Kuzmin
 
 #include "StdAfx.h"
 #include "Shelve.h"
@@ -67,7 +65,7 @@ ShelveInfoNative^ ShelveInfoNative::CreateActiveInfo(bool modes)
 }
 
 // _110313_054719 Now works for passive, too.
-void ShelveInfoNative::Pop(bool active)
+void ShelveInfoNative::PopWork(bool active)
 {
 	HANDLE handle = active ? PANEL_ACTIVE : PANEL_PASSIVE;
 	if (Path)
@@ -111,11 +109,11 @@ ShelveInfoModule::ShelveInfoModule(Panel2^ panel)
 
 String^ ShelveInfoModule::Title::get()
 {
-	return JoinText(_panel->Title, _panel->CurrentLocation);
+	return Works::Kit::JoinText(_panel->Title, _panel->CurrentLocation);
 }
 
 // _110313_054719 Still does not support passive.
-void ShelveInfoModule::Pop(bool active)
+void ShelveInfoModule::PopWork(bool active)
 {
 	Log::Source->TraceInformation(__FUNCTION__);
 	if (!active) throw gcnew NotSupportedException("Passive panel is not supported");

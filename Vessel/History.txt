@@ -1,5 +1,157 @@
-NuGet package: https://www.nuget.org/packages/FarNet.Vessel
-FarNet 5.2.4
+https://www.nuget.org/packages/FarNet.Vessel
+
+= 6.0.0 =
+
+Requires FarNet 8
+
+= 5.0.2 =
+
+master -> main, update links.
+
+= 5.0.1 =
+
+Requires FarNet 7.0.4
+
+[F12] in file and folder histories toggles filter by the current directory.
+
+= 5.0.0 =
+
+Requires FarNet 7, uses .NET 7.
+
+= 4.0.1 =
+
+Use latest FarNet.
+
+= 4.0.0 =
+
+Requires FarNet 6, uses .NET 6.
+
+= 3.0.3 =
+
+New setting MinimumRecentFileCount.
+
+Choice log format: Gain, Rank, Age, Mode, Path.
+
+= 3.0.2 =
+
+Folders:
+- [CtrlEnter] navigates to the folder.
+
+New format of the choice log.
+Fields: Gain, Rank, Mode, Path.
+
+= 3.0.0 =
+
+New history concept, more on tracked items and far history than on AI.
+Not necessarily better (may be) but comparable and more practical.
+
+Log format is the same but on the first update logs will be reduced.
+New Vessel does not have to keep so many tracking records as before.
+
+[Del] in history lists stops or starts the current item tracking.
+
+Settings `ChoiceLog` specifies the optional log file of choices.
+
+= 2.7.1 =
+
+Avoid unnecessary copies and orderings.
+Use sliding span and age evidence ranking.
+
+= 2.7.0 =
+
+Simplified menu. Note the hotkey of "Smart commands" is 3.
+
+Slightly improved predictions and performance.
+
+= 2.6.2 =
+
+Use net472, like FarNet.
+
+Folder history:
+- [ShiftEnter] opens the selected folder in a new window
+
+= 2.6.1 =
+
+Tweaks in help and settings.
+
+= 2.6.0 =
+
+Requires FarNet 5.6.0.
+Uses new XML settings.
+Remove old:
+- %FARPROFILE%\FarNet\Vessel\Settings.resources
+- %FARLOCALPROFILE%\FarNet\Vessel\Settings.local.resources
+
+= 2.5.7 =
+
+Maintenance.
+
+= 2.5.6 =
+
+Amend ShiftDel in file history for locked entries.
+
+= 2.5.5 =
+
+ShiftDel in lists also removes from Far history.
+
+= 2.5.4 =
+
+Fix command history regression.
+
+= 2.5.3 =
+
+Use FarNet 5.4.17
+Assign 3 different guid to file, folder, command history dialogs.
+
+= 2.5.2 =
+
+Use FarNet 5.4.15
+New setting MaximumFileCountFromFar limits items from Far history.
+
+= 2.5.1 =
+
+Minor tweaks.
+
+= 2.5.0 =
+
+Required .NET Framework 4.5
+
+= 2.4.1 =
+
+Command history items are case sensitive.
+
+= 2.4.0 =
+
+Support smart command history in addition to file and folder history.
+
+New setting MaximumFileAge (~ 365 days) for removing old items.
+
+Tweak heuristics for slightly better predictions.
+
+= 2.3.3 =
+
+Retired obsolete bits of code and settings.
+Updated README and wiki: https://github.com/nightroman/FarNet/wiki/Vessel
+
+= 2.3.2 =
+
+Log known Far records on first openings from lists.
+This improves predictions for newly opened items.
+
+= 2.3.1 =
+
+- Add file history records on "go to" from the history list.
+- Do not add almost the same time entries from Far histories.
+
+= 2.3.0 =
+
+File history works in the same way as folder history, more effective.
+Only openings from lists are logged and then joined with Far history.
+Also, Vessel is not pre-loaded when Far starts.
+
+= 2.2.1 =
+
+Most recent folders from Far history were not properly positioned.
 
 = 2.2.0 =
 
@@ -132,7 +284,7 @@ Fixed the plain history list and minor defects in 1.0.3.
 * Use of closing time instead of opening time is better for a few reasons.
 * Smart history list shows separators of the groups defined by factors.
 * Training shows the progress form.
-* Option Limits (see About-Vessel).
+* Option Limits (see README).
 * Ranking model is based on two factors instead of one. As a result:
 - Training is slow but factors can live longer without re-training.
 - Expected about 10% more total gain.

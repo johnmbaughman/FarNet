@@ -1,0 +1,36 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
+    <FarHome Condition="'$(FarHome)' == ''">C:\Bin\Far\x64</FarHome>
+    <MyOutDir>$(FarHome)\FarNet\Modules\FSharpFar</MyOutDir>
+  </PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <WarningLevel>5</WarningLevel>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\FarNet.Common\Abc.fs" />
+    <Compile Include="..\FarNet.Common\AbcConfig.fs" />
+    <Compile Include="..\FarNet.Common\AbcService.fs" />
+    <Compile Include="..\FarNet.Common\Parser.fs" />
+    <Compile Include="..\FarNet.Common\BlockBuilder.fs" />
+    <Compile Include="..\FarNet.Common\TraceBuilder.fs" />
+    <Compile Include="AbcCommandLine.fs" />
+    <Compile Include="AssemblyResolver.fs" />
+    <Compile Include="Console.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" Version="8.0.200" />
+    <PackageReference Include="FSharp.Compiler.Service" Version="43.8.200" />
+  </ItemGroup>
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <ItemGroup>
+      <MyItem1 Include="$(OutDir)\fsx.*" Exclude="*.deps.json" />
+    </ItemGroup>
+    <Copy DestinationFolder="$(MyOutDir)" SourceFiles="@(MyItem1)" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

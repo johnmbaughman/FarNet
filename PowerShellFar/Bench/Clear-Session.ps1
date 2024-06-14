@@ -1,4 +1,3 @@
-
 <#
 .Synopsis
 	Clears PowerShell session resources.
@@ -6,122 +5,119 @@
 
 .Description
 	It removes global variables with empty Description and Option values but
-	keeps variables listed in the code as $keep.
+	keeps variables $keepVariables.
 
-	In addition, the script clears $Error list (optionally), calls garbage
+	In addition, the script clears $Error (unless -KeepError), calls garbage
 	collection and gets some statistics.
 
+.Parameter KeepError
+		Tells to keep errors in $Error.
+
 .Outputs
-	An object with properties:
-	-- WorkingSet - the current process working set (KB)
-	-- ManagedBefore - before garbage collection (KB)
-	-- ManagedAfter - after garbage collection (KB)
-	-- ErrorCount - current or removed, see -KeepError
-	-- RemovedVariableCount
+	An object with:
+	- WorkingSet - process working set (MB)
+	- PrivateMemory - private memory (MB)
+	- ManagedMemory - managed memory (MB)
+	- ErrorCount - current or removed
+	- RemovedVariableCount
 #>
 
-param
-(
-	[switch]
-	# Do not remove errors.
-	$KeepError
-	,
-	[switch]
-	# Writes verbose info.
-	$Verbose
+[CmdletBinding()]
+param(
+	[switch]$KeepError
 )
 
-&{
-	if ($Verbose) { $VerbosePreference = 'Continue' }
+if ($MyInvocation.InvocationName -eq '.') {throw 'Do not dot source this script.'}
+if ($PSBoundParameters['Verbose']) { $VerbosePreference = 'Continue' }
+$ErrorActionPreference=1
 
-	# stat
-	$r = 1 | Select-Object WorkingSet, PrivateMemory, ManagedAfter, ManagedBefore, ErrorCount, RemovedVariableCount
-	$r.ManagedBefore = [long]([System.GC]::GetTotalMemory($false) / 1kb)
+# keep these variables
+$keepVariables = @(
+	'VSSetupVersionTable' # module VSSetup
+	'$'
+	'?'
+	'^'
+	'_'
+	'args'
+	'ConfirmPreference'
+	'ConsoleFileName'
+	'DebugPreference'
+	'Error'
+	'ErrorActionPreference'
+	'ErrorView'
+	'ExecutionContext'
+	'foreach'
+	'FormatEnumerationLimit'
+	'HOME'
+	'Host'
+	'input'
+	'LastExitCode'
+	'LogEngineLifeCycleEvent'
+	'LogProviderLifeCycleEvent'
+	'Matches'
+	'MaximumAliasCount'
+	'MaximumDriveCount'
+	'MaximumErrorCount'
+	'MaximumFunctionCount'
+	'MaximumHistoryCount'
+	'MaximumVariableCount'
+	'MyInvocation'
+	'NestedPromptLevel'
+	'OFS'
+	'OutputEncoding'
+	'PID'
+	'Profile'
+	'ProgressPreference'
+	'PSBoundParameters'
+	'PSCmdlet'
+	'PSCommandPath'
+	'PSCulture'
+	'PSDebugContext'
+	'PSEmailServer'
+	'PSHOME'
+	'psISE'
+	'psScriptRoot'
+	'PSSessionApplicationName'
+	'PSSessionConfigurationName'
+	'PSSessionOption'
+	'PSUICulture'
+	'PSVersionTable'
+	'PWD'
+	'ReportErrorShowExceptionClass'
+	'ReportErrorShowInnerException'
+	'ReportErrorShowSource'
+	'ReportErrorShowStackTrace'
+	'ShellId'
+	'StackTrace'
+	'this'
+	'VerbosePreference'
+	'WarningPreference'
+	'WhatIfPreference'
+)
 
-	# keep these variables:
-	$keep = @(
-		'VSSetupVersionTable' # module VSSetup
-		'$'
-		'?'
-		'^'
-		'_'
-		'args'
-		'ConfirmPreference'
-		'ConsoleFileName'
-		'DebugPreference'
-		'Error'
-		'ErrorActionPreference'
-		'ErrorView'
-		'ExecutionContext'
-		'foreach'
-		'FormatEnumerationLimit'
-		'HOME'
-		'Host'
-		'input'
-		'LastExitCode'
-		'Matches'
-		'MaximumAliasCount'
-		'MaximumDriveCount'
-		'MaximumErrorCount'
-		'MaximumFunctionCount'
-		'MaximumHistoryCount'
-		'MaximumVariableCount'
-		'MyInvocation'
-		'NestedPromptLevel'
-		'OFS'
-		'OutputEncoding'
-		'PID'
-		'Profile'
-		'ProgressPreference'
-		'PSBoundParameters'
-		'PSCmdlet'
-		'PSCommandPath' #?? V3
-		'PSCulture'
-		'PSDebugContext'
-		'PSEmailServer'
-		'PSHOME'
-		'psISE'
-		'psScriptRoot'
-		'PSSessionApplicationName'
-		'PSSessionConfigurationName'
-		'PSSessionOption'
-		'PSUICulture'
-		'PSVersionTable'
-		'PWD'
-		'ReportErrorShowExceptionClass'
-		'ReportErrorShowInnerException'
-		'ReportErrorShowSource'
-		'ReportErrorShowStackTrace'
-		'ShellId'
-		'StackTrace'
-		'this'
-		'VerbosePreference'
-		'WarningPreference'
-		'WhatIfPreference'
-	)
+# result
+$r = 1 | Select-Object WorkingSet, PrivateMemory, ManagedMemory, ErrorCount, RemovedVariableCount
 
-	$r.RemovedVariableCount = 0
-	Get-Variable * -Scope Global | .{process{
-		if ((!$_.Description) -and ($_.Options -eq 0) -and ($keep -notcontains $_.Name)) {
-			Remove-Variable $_.Name -Scope Global -ErrorAction Continue -Verbose:$Verbose
-			++$r.RemovedVariableCount
-		}
-	}}
-
-	# now clear errors
-	$r.ErrorCount = $Error.Count
-	if (!$KeepError) {
-		$Error.Clear()
+# remove variables
+$r.RemovedVariableCount = 0
+foreach($_ in Get-Variable * -Scope Global) {
+	if ((!$_.Description) -and ($_.Options -eq 0) -and ($keepVariables -notcontains $_.Name)) {
+		Remove-Variable $_.Name -Scope Global -ErrorAction Continue -Verbose:$Verbose
+		++$r.RemovedVariableCount
 	}
-
-	# garbage collection
-	[System.GC]::Collect()
-	[System.GC]::WaitForPendingFinalizers()
-
-	# statistics
-	$r.ManagedAfter = [long]([System.GC]::GetTotalMemory($false) / 1kb)
-	$process = Get-Process -Id $PID
-	$r.WorkingSet = $process.WorkingSet64 / 1kb
-	$r.PrivateMemory = $process.PrivateMemorySize64 / 1kb
-	$r
 }
+
+# clear errors
+$r.ErrorCount = $global:Error.Count
+if (!$KeepError) {
+	$global:Error.Clear()
+}
+
+# collect garbage
+$r.ManagedMemory = [long]([System.GC]::GetTotalMemory($true) / 1mb)
+
+# process info
+$process = Get-Process -Id $PID
+$r.WorkingSet = [long]($process.WorkingSet64 / 1mb)
+$r.PrivateMemory = [long]($process.PrivateMemorySize64 / 1mb)
+$r

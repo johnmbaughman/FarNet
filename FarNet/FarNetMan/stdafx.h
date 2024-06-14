@@ -1,16 +1,19 @@
 
 #pragma once
-
-#define WIN32_LEAN_AND_MEAN	// Exclude rarely-used stuff from Windows headers
-#define NOTEXTMETRIC // Fix pack 2 linking problem
-
-#pragma warning(push,3)
+#include <memory>
+#include <vector>
 #include <vcclr.h>
 #include "plugin.hpp"
-#pragma warning(pop)
 
-// Deny .NET
-#define Console stop_Console
+enum AppState
+{
+	None,
+	Loading,
+	Loaded,
+	Unloaded
+};
+
+extern AppState g_AppState;
 
 // Deny Far
 #define ACTL_GETWINDOWINFO stop_ACTL_GETWINDOWINFO
@@ -23,6 +26,8 @@
 #define FCTL_GETPANELITEM stop_FCTL_GETPANELITEM
 #define FCTL_GETSELECTEDPANELITEM stop_FCTL_GETSELECTEDPANELITEM
 #define FCTL_SETPANELDIRECTORY stop_FCTL_SETPANELDIRECTORY
+#define FCTL_GETUSERSCREEN stop_FCTL_GETUSERSCREEN
+#define FCTL_SETUSERSCREEN stop_FCTL_SETUSERSCREEN
 
 using namespace FarNet::Forms;
 using namespace FarNet;
@@ -34,9 +39,10 @@ using namespace System::Globalization;
 using namespace System::IO;
 using namespace System::Reflection;
 using namespace System::Resources;
-using namespace System::Runtime::CompilerServices;
 using namespace System::Text::RegularExpressions;
 using namespace System::Text;
+using namespace System::Threading;
+using namespace System::Threading::Tasks;
 using namespace System;
 
 #undef CreateDialog
@@ -49,7 +55,6 @@ using namespace System;
 
 extern PluginStartupInfo Info;
 extern const GUID MainGuid;
+extern const GUID ColorerGuid;
 
-#include "Log.h"
 #include "Utils.h"
-

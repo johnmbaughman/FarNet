@@ -23,10 +23,8 @@ public:
 	virtual property bool ShowHidden { bool get(); }
 	virtual property bool UseSortGroups { bool get(); void set(bool value); }
 	virtual property FarFile^ CurrentFile { FarFile^ get(); }
-	virtual property IList<FarFile^>^ ShownFiles { IList<FarFile^>^ get(); }
+	virtual property IList<FarFile^>^ Files { IList<FarFile^>^ get(); }
 	virtual property IList<FarFile^>^ SelectedFiles { IList<FarFile^>^ get(); }
-	virtual property IList<FarFile^>^ ShownList { IList<FarFile^>^ get(); }
-	virtual property IList<FarFile^>^ SelectedList { IList<FarFile^>^ get(); }
 	virtual property int CurrentIndex { int get(); }
 	virtual property int TopIndex { int get(); }
 	virtual property PanelSortMode SortMode { PanelSortMode get(); void set(PanelSortMode value); }
@@ -38,6 +36,8 @@ public:
 	virtual property String^ CurrentDirectory { String^ get(); void set(String^ value); }
 public:
 	virtual bool GoToName(String^ name, bool fail);
+	virtual array<FarFile^>^ GetFiles();
+	virtual array<FarFile^>^ GetSelectedFiles();
 	virtual array<int>^ SelectedIndexes();
 	virtual void Close();
 	virtual void Close(String^ path);

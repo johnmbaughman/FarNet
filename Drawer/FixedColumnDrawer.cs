@@ -1,30 +1,24 @@
 ﻿
-/*
-FarNet module Drawer
-Copyright (c) 2012-2016 Roman Kuzmin
-*/
+// FarNet module Drawer
+// Copyright (c) Roman Kuzmin
 
-using System;
+namespace FarNet.Drawer;
 
-namespace FarNet.Drawer
+[ModuleDrawer(Name = Settings.FixedColumnName, Priority = 1, Id = Settings.FixedColumnGuid)]
+public class FixedColumnDrawer : ModuleDrawer
 {
-	[System.Runtime.InteropServices.Guid(Settings.FixedColumnGuid)]
-	[ModuleDrawer(Name = Settings.FixedColumnName, Priority = 1)]
-	public class FixedColumnDrawer : ModuleDrawer
+	public override void Invoke(IEditor editor, ModuleDrawerEventArgs e)
 	{
-		int _columnNumber = Settings.Default.FixedColumnNumber;
-		readonly ConsoleColor _foreground = Settings.Default.FixedColumnColorForeground;
-		readonly ConsoleColor _background = Settings.Default.FixedColumnColorBackground;
-		public override void Invoke(IEditor editor, ModuleDrawerEventArgs e)
+		var sets = Settings.Default.GetData().FixedColumn;
+		foreach (var line in e.Lines)
 		{
-			foreach (var line in e.Lines)
+			foreach (var columnNumber in sets.ColumnNumbers)
 			{
-
 				e.Colors.Add(new EditorColor(
 					line.Index,
-					editor.ConvertColumnScreenToEditor(line.Index, _columnNumber - 1),
-					editor.ConvertColumnScreenToEditor(line.Index, _columnNumber),
-					_foreground, _background));
+					editor.ConvertColumnScreenToEditor(line.Index, columnNumber - 1),
+					editor.ConvertColumnScreenToEditor(line.Index, columnNumber),
+					sets.ColorForeground, sets.ColorBackground));
 			}
 		}
 	}

@@ -1,33 +1,9 @@
 
-/*
-FarNet plugin for Far Manager
-Copyright (c) 2006-2016 Roman Kuzmin
-*/
+// FarNet plugin for Far Manager
+// Copyright (c) Roman Kuzmin
 
 #include "StdAfx.h"
 #include "Wrappers.h"
-
-namespace FarNet
-{;
-bool Configuration::GetBool(String^ key)
-{
-	String^ value = Environment::GetEnvironmentVariable(key);
-	if (!value)
-		return false;
-
-	bool result;
-	if (!Boolean::TryParse(value->ToString(), result))
-		return false;
-
-	return result;
-}
-
-String^ Configuration::GetString(String^ key)
-{
-	return Environment::GetEnvironmentVariable(key);
-}
-
-}
 
 // empty string
 wchar_t CStr::s_empty[1] = {0};
@@ -99,9 +75,11 @@ void CopyStringToChars(String^ str, wchar_t* buffer)
 // Generic Far wrappers
 //
 
-void ThrowEditorLocked()
+void ThrowEditorLocked(intptr_t editorId)
 {
-	if (Far::Api->Editor->IsLocked)
+	AutoEditorInfo ei(editorId);
+
+	if ((ei.CurState & ECSTATE_LOCKED) != 0)
 		throw gcnew InvalidOperationException("Editor is locked for changes. Unlock by [CtrlL].");
 }
 
@@ -110,7 +88,7 @@ void EditorControl_ECTL_DELETEBLOCK(intptr_t editorId)
 	if (Info.EditorControl(editorId, ECTL_DELETEBLOCK, 0, 0))
 		return;
 
-	ThrowEditorLocked();
+	ThrowEditorLocked(editorId);
 	throw gcnew InvalidOperationException(__FUNCTION__ " failed.");
 }
 
@@ -119,7 +97,7 @@ void EditorControl_ECTL_DELETECHAR(intptr_t editorId)
 	if (Info.EditorControl(editorId, ECTL_DELETECHAR, 0, 0))
 		return;
 
-	ThrowEditorLocked();
+	ThrowEditorLocked(editorId);
 	throw gcnew InvalidOperationException(__FUNCTION__ " failed.");
 }
 
@@ -128,7 +106,7 @@ void EditorControl_ECTL_DELETESTRING(intptr_t editorId)
 	if (Info.EditorControl(editorId, ECTL_DELETESTRING, 0, 0))
 		return;
 
-	ThrowEditorLocked();
+	ThrowEditorLocked(editorId);
 	throw gcnew InvalidOperationException(__FUNCTION__ " failed.");
 }
 
@@ -145,7 +123,7 @@ void EditorControl_ECTL_INSERTSTRING(intptr_t editorId, bool indent)
 	if (Info.EditorControl(editorId, ECTL_INSERTSTRING, 0, &value))
 		return;
 
-	ThrowEditorLocked();
+	ThrowEditorLocked(editorId);
 	throw gcnew InvalidOperationException(__FUNCTION__ " failed.");
 }
 
@@ -161,7 +139,7 @@ void EditorControl_ECTL_INSERTTEXT(intptr_t editorId, Char text, int overtype)
 		if (Info.EditorControl(editorId, ECTL_INSERTTEXT, 0, (wchar_t*)buf))
 			return;
 
-		ThrowEditorLocked();
+		ThrowEditorLocked(editorId);
 		throw gcnew InvalidOperationException(__FUNCTION__ " failed.");
 	}
 	finally
@@ -184,7 +162,7 @@ void EditorControl_ECTL_INSERTTEXT(intptr_t editorId, String^ text, int overtype
 		if (Info.EditorControl(editorId, ECTL_INSERTTEXT, 0, (wchar_t*)pin))
 			return;
 
-		ThrowEditorLocked();
+		ThrowEditorLocked(editorId);
 		throw gcnew InvalidOperationException(__FUNCTION__ " failed.");
 	}
 	finally
@@ -218,7 +196,7 @@ void EditorControl_ECTL_SETSTRING(intptr_t editorId, EditorSetString& ess)
 	if (Info.EditorControl(editorId, ECTL_SETSTRING, 0, &ess))
 		return;
 
-	ThrowEditorLocked();
+	ThrowEditorLocked(editorId);
 	throw gcnew InvalidOperationException(__FUNCTION__ " failed with line index: " + ess.StringNumber + ". Ensure current editor and valid line number.");
 }
 
@@ -413,52 +391,6 @@ FILETIME DateTimeToFileTime(DateTime time)
 	return *(FILETIME*)&r;
 }
 
-// Simple wildcard (* and ?)
-String^ Wildcard(String^ pattern)
-{
-	pattern = Regex::Escape(pattern);
-	for(int i = 0; i < pattern->Length - 1; ++i)
-	{
-		if (pattern[i] != '\\')
-			continue;
-
-		if (pattern[i + 1] == '*')
-			pattern = pattern->Substring(0, i) + ".*" + pattern->Substring(i + 2);
-		if (pattern[i + 1] == '?')
-			pattern = pattern->Substring(0, i) + ".?" + pattern->Substring(i + 2);
-		else
-			++i;
-	}
-	return pattern;
-}
-
-// Joins strings with spaces
-String^ JoinText(String^ head, String^ tail)
-{
-	if (String::IsNullOrEmpty(head))
-		return tail ? tail : String::Empty;
-	if (String::IsNullOrEmpty(tail))
-		return head ? head : String::Empty;
-	return head + " " + tail;
-}
-
-// Validates rect position and width by screen size so that rect is visible.
-void ValidateRect(int& x, int& w, int min, int size)
-{
-	if (x < 0)
-		x = min + (size - w)/2;
-	int r = x + w - 1;
-	if (r > min + size - 1)
-	{
-		x -= (r - min - size + 1);
-		if (x < min)
-			x = min;
-		r = x + w - 1;
-		if (r > min + size - 1)
-			w -= (r - min - size + 1);
-	}
-}
-
 void DeleteSourceOptional(String^ path, DeleteSource option)
 {
 	if (option != DeleteSource::File && option != DeleteSource::Folder)
@@ -478,11 +410,6 @@ void DeleteSourceOptional(String^ path, DeleteSource option)
 	{
 		Log::TraceException(e);
 	}
-}
-
-int Compare(String^ strA, String^ strB)
-{
-	return String::Compare(strA, strB, true, CultureInfo::InvariantCulture);
 }
 
 int ParseInt(String^ value, int fallback)
