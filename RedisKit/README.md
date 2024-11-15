@@ -7,10 +7,11 @@ Far Manager Redis helpers based on FarNet.Redis
 - [About](#about)
 - [Install](#install)
 - [Commands](#commands)
-- [Keys panel](#keys-panel)
-- [Hash panel](#hash-panel)
-- [List panel](#list-panel)
-- [Set panel](#set-panel)
+    - [Keys panel](#keys-panel)
+    - [Hash panel](#hash-panel)
+    - [List panel](#list-panel)
+    - [Set panel](#set-panel)
+    - [Edit string](#edit-string)
 - [Menu](#menu)
 - [Settings](#settings)
 
@@ -50,70 +51,61 @@ using F11 / FarNet / Invoke or defined in the user menu and file associations.
 Command parameters are key=value pairs using the connection string format
 
 ```
-rk: <mask>
-rk:subcommand [key=value;] ...
+rk:command key=value; ...
 ```
 
 **Common parameters**
 
-- `redis=<configuration>`
+- `redis=<string>`
 
-    Specifies the Redis configuration string or name.\
-    Default: see [Settings](#settings).
+    Specifies Redis configuration string or name from [Settings](#settings).
 
 **Commands**
 
-- `rk:`
-
-    Opens the [Keys panel](#keys-panel) with the default Redis configuration
-    and an optional key mask specified with a space after the command prefix.
-
-
-- `rk:edit`
-
-    Opens the editor with String key value.
-
-
 - `rk:keys`
 
-    Opens the [Keys panel](#keys-panel).
+    Opens the [Keys panel](#keys-panel) with the key pattern.
 
+- `rk:tree`
+
+    Opens the [Keys panel](#keys-panel) with inferred folders.
 
 - `rk:hash`
 
     Opens the [Hash panel](#hash-panel).
 
-
 - `rk:list`
 
     Opens the [List panel](#list-panel).
-
 
 - `rk:set`
 
     Opens the [Set panel](#set-panel).
 
+- `rk:edit`
+
+    Opens the string editor, see [Edit string](#edit-string).
 
 *********************************************************************
 ## Keys panel
 
 [Contents]
 
-This panel shows keys, value types and end-of-life dates.
+This panel shows key folders, keys, value types and end-of-life dates.
 Type marks: `*` String, `H` Hash, `L` List, `S` Set.
 
 The panel is opened by
 
 ```
-rk: [<mask>]
-rk:keys [mask=<mask>;] [redis=<configuration>;]
+rk:keys mask=<string>
+rk:tree root=<string>; colon=<string>
 ```
 
 Parameters
 
-- `mask=<mask>`
+- `mask=<string>` (optional)
 
-    Specifies the search pattern or wildcard or fixed prefix.
+    Specifies the search pattern or wildcard or fixed prefix for `rk:keys`.
 
     (1) If the mask contains `[` or `]` then it is treated as Redis pattern.
     See: <https://redis.io/docs/latest/commands/keys>
@@ -124,11 +116,24 @@ Parameters
     (3) Otherwise the mask is used as the fixed literal prefix. Keys are shown
     without this prefix but all operations work on actual keys with the prefix.
 
+- `root=<string>` (optional)
+
+    Specifies the root key prefix for `rk:tree`.\
+    The trailing separator (colon) is optional.
+
+- `colon=<string>` (optional)
+
+    Specifies the folder separator for `rk:tree`.\
+    The default is traditional Redis colon (:).
+
 Keys and actions
 
 - `Enter`
 
-    Opens panels for Hash, List, Set keys.
+    For Hash, List, Set keys opens their panels.\
+    Use `Esc` in order to return to the keys panel.
+
+    For folders enters the cursor folder.
 
 - `F4`
 
@@ -140,7 +145,8 @@ Keys and actions
 
 - `ShiftF6`
 
-    Renames the cursor key.
+    Renames the cursor key or key folder.\
+    (!) Take special care on renaming folders.
 
 - `F7`
 
@@ -148,7 +154,14 @@ Keys and actions
 
 - `F8`, `Del`
 
-    Deletes the selected keys.
+    Deletes the selected keys and key folders.\
+    (!) Take special care on deleting folders.
+
+- `CtrlPgDn`, `CtrlPgUp`, `Enter` "dots", `CtrlBackSlash`
+
+    Folder navigation keys for `rk:tree` panel.
+
+    If `root` is specified then navigating up stops at it.
 
 *********************************************************************
 ## Hash panel
@@ -159,12 +172,12 @@ This panel shows hash entries, fields and values. It is opened from the keys
 panel or by this command:
 
 ```
-rk:hash key=<name>; [redis=<configuration>;]
+rk:hash key=<string>
 ```
 
 Parameters
 
-- `key=<name>`
+- `key=<string>` (required)
 
     Specifies the hash key. If the key does not exist, a new hash will be
     created. If the key type does not match, it's an error.
@@ -200,12 +213,12 @@ This panel shows list items. It is opened from the keys panel or by this
 command:
 
 ```
-rk:list key=<name>; [redis=<configuration>;]
+rk:list key=<string>
 ```
 
 Parameters
 
-- `key=<name>`
+- `key=<string>` (required)
 
     Specifies the list key. If the key does not exist, a new list will be
     created. If the key type does not match, it's an error.
@@ -241,12 +254,12 @@ This panel shows set members. It is opened from the keys panel or by this
 command:
 
 ```
-rk:set key=<name>; [redis=<configuration>;]
+rk:set key=<string>
 ```
 
 Parameters
 
-- `key=<name>`
+- `key=<string>` (required)
 
     Specifies the set key. If the key does not exist, a new set will be
     created. If the key type does not match, it's an error.
@@ -274,9 +287,32 @@ Keys and actions
     Deletes the selected members.
 
 *********************************************************************
+## Edit string
+
+[Contents]
+
+This command opens the string editor
+
+```
+rk:edit key=<string>
+```
+
+Parameters
+
+- `key=<string>` (required)
+
+    Specifies the existing or new string key.
+
+The editor is usually not modal. Saving commits the string to Redis.
+
+*********************************************************************
 ## Menu
 
 [Contents]
+
+- **Copy key to clipboard**
+
+    Copies the current key name to clipboard.
 
 - **Help**
 
@@ -289,7 +325,12 @@ Keys and actions
 
 F11 / FarNet / Settings / RedisKit Settings and Workings
 
-**Settings/Configurations**
+**Settings / FolderSymbols**
+
+Specifies valid folder symbols in addition to letters and digits.
+They are used by `rk:tree` for inferring folder names.
+
+**Settings / Configurations**
 
 Specifies Redis configurations, environment variables are expanded.
 The default configuration name is specified by `Workings/Configuration`.
@@ -303,7 +344,7 @@ Example:
   </Configurations>
 ```
 
-**Workings/Configuration**
+**Workings / Configuration**
 
 Specifies the current default configuration name.
 The name must exist in `Settings/Configurations`.

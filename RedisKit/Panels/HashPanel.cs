@@ -1,8 +1,7 @@
 ﻿using FarNet;
-using System;
 using System.Linq;
 
-namespace RedisKit;
+namespace RedisKit.Panels;
 
 class HashPanel : BasePanel<HashExplorer>
 {
@@ -23,10 +22,6 @@ class HashPanel : BasePanel<HashExplorer>
 	}
 
 	protected override string HelpTopic => "hash-panel";
-
-	internal override void AddMenu(IMenu menu)
-	{
-	}
 
 	public override void UICloneFile(CloneFileEventArgs args)
 	{

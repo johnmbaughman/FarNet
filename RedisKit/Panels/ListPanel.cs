@@ -1,7 +1,7 @@
 ﻿using FarNet;
 using System.Linq;
 
-namespace RedisKit;
+namespace RedisKit.Panels;
 
 class ListPanel : BasePanel<ListExplorer>
 {
@@ -22,10 +22,6 @@ class ListPanel : BasePanel<ListExplorer>
 	}
 
 	protected override string HelpTopic => "list-panel";
-
-	internal override void AddMenu(IMenu menu)
-	{
-	}
 
 	public override void UICloneFile(CloneFileEventArgs args)
 	{

@@ -1,4 +1,5 @@
 ﻿using FarNet;
+using RedisKit.Commands;
 using System;
 using System.Linq;
 
@@ -9,43 +10,36 @@ public class Command : ModuleCommand
 {
 	public override void Invoke(object sender, ModuleCommandEventArgs e)
 	{
-        AnyCommand? command = null;
-        try
-        {
+		AnyCommand? command = null;
+		try
+		{
 			var (subcommand, parameters) = Parameters.Parse(e.Command);
 
-			if (subcommand == null)
+			command = subcommand switch
 			{
-				command = new KeysCommand(e.Command.Trim());
-			}
-			else
-			{
-                if (parameters == null)
-                {
-                    Host.Instance.ShowHelpTopic("commands");
-                    return;
-                }
-                
-				command = subcommand switch
-				{
-					"keys" => new KeysCommand(parameters),
-					"edit" => new EditCommand(parameters),
-					"hash" => new HashCommand(parameters),
-					"list" => new ListCommand(parameters),
-					"set" => new SetCommand(parameters),
-					_ => throw new InvalidOperationException($"Unknown command 'rk:{subcommand}'.")
-				};
+				"keys" => new KeysCommand(parameters),
+				"tree" => new TreeCommand(parameters),
+				"edit" => new EditCommand(parameters),
+				"hash" => new HashCommand(parameters),
+				"list" => new ListCommand(parameters),
+				"set" => new SetCommand(parameters),
+				_ => throw new ModuleException($"Unknown command 'rk:{subcommand}'.")
+			};
 
-				if (parameters.Count > 0)
-				{
-					throw new InvalidOperationException($"""
-					Uknknown parameters
-					Subcommand: {subcommand}
-					Parameters: {string.Join(", ", parameters.Keys.Cast<string>())}
-					""");
-				}
+			if (parameters.Count > 0)
+			{
+				throw new ModuleException($"""
+				Uknknown parameters
+				Subcommand: {subcommand}
+				Parameters: {string.Join(", ", parameters.Keys.Cast<string>())}
+				""");
 			}
+
 			command.Invoke();
+		}
+		catch (ModuleException)
+		{
+			throw;
 		}
 		catch (Exception ex)
 		{

@@ -2,7 +2,7 @@
 using System;
 using System.Data.Common;
 
-namespace RedisKit;
+namespace GitKit.Commands;
 
 static class Parameters
 {
@@ -52,13 +52,13 @@ static class Parameters
 
 	public static string GetRequiredString(this DbConnectionStringBuilder parameters, string name, bool expand = false)
 	{
-		return GetString(parameters, name, expand) ?? throw new ModuleException($"Missing required parameter '{name}'.");
+		return parameters.GetString(name, expand) ?? throw new ModuleException($"Missing required parameter '{name}'.");
 	}
 
 	public static bool GetBool(this DbConnectionStringBuilder parameters, string name)
 	{
-		var string1 = GetString(parameters, name);
-		if (string1 == null)
+		var string1 = parameters.GetString(name);
+		if (string1 is null)
 			return false;
 
 		if (bool.TryParse(string1, out bool bool1))
@@ -78,8 +78,8 @@ static class Parameters
 
 	public static T GetValue<T>(this DbConnectionStringBuilder parameters, string name)
 	{
-		var string1 = GetString(parameters, name);
-		if (string1 == null)
+		var string1 = parameters.GetString(name);
+		if (string1 is null)
 			return default!;
 
 		try

@@ -1,7 +1,8 @@
 ﻿using FarNet;
+using RedisKit.UI;
 using System.Linq;
 
-namespace RedisKit;
+namespace RedisKit.Panels;
 
 class KeysPanel : BasePanel<KeysExplorer>
 {
@@ -24,40 +25,74 @@ class KeysPanel : BasePanel<KeysExplorer>
 
 	protected override string HelpTopic => "keys-panel";
 
-	internal override void AddMenu(IMenu menu)
-	{
-	}
-
 	public override void UICloneFile(CloneFileEventArgs args)
 	{
-		var name = args.File.Name;
-		var newName = Far.Api.Input("New key name", "Key", $"Clone '{name}'", name);
-		if (newName is null)
+		if (args.File.IsDirectory)
 		{
 			args.Result = JobResult.Ignore;
 			return;
 		}
 
-		args.Data = newName;
+		var input = Explorer.GetNameInput(args.File);
+
+		var ui = new InputBox2
+		{
+			Title = $"Clone '{args.File.Name}'",
+			Text1 = input.Name,
+			Text2 = input.Prefix,
+			Prompt1 = "Key name",
+			Prompt2 = "Prefix",
+			History1 = Host.History.Key,
+			History2 = Host.History.Prefix,
+		};
+
+		if (!ui.Show())
+		{
+			args.Result = JobResult.Ignore;
+			return;
+		}
+
+		args.Data = new Files.ArgsDataName($"{ui.Text2}{ui.Text1}");
 		Explorer.CloneFile(args);
 	}
 
 	public override void UICreateFile(CreateFileEventArgs args)
 	{
-		var newName = Far.Api.Input("New key name", "Key", $"New String", null);
-		if (newName is null)
+		var ui = new InputBox2
+		{
+			Title = "Create String",
+			Text2 = Explorer.Prefix,
+			Prompt1 = "Key name",
+			Prompt2 = "Prefix",
+			History1 = Host.History.Key,
+			History2 = Host.History.Prefix,
+		};
+
+		if (!ui.Show())
 		{
 			args.Result = JobResult.Ignore;
 			return;
 		}
 
-		args.Data = newName;
+		args.Data = new Files.ArgsDataName($"{ui.Text2}{ui.Text1}");
 		Explorer.CreateFile(args);
 	}
 
 	public override void UIDeleteFiles(DeleteFilesEventArgs args)
 	{
-		var text = $"Delete keys ({args.Files.Count}):\n{string.Join("\n", args.Files.Select(x => x.Name))}";
+		string message;
+		if (Explorer.Colon is { })
+		{
+			var n1 = args.Files.Count(x => x.IsDirectory);
+			var n2 = args.Files.Count(x => !x.IsDirectory);
+			message = $"Delete {n1} folder(s), {n2} key(s):";
+		}
+		else
+		{
+			message = $"Delete {args.Files.Count} key(s):";
+		}
+
+		var text = $"{message}\n{string.Join("\n", args.Files.Select(x => x.Name))}";
 		var op = MessageOptions.YesNo | MessageOptions.LeftAligned;
 		if (0 != Far.Api.Message(text, Host.MyName, op))
 		{
@@ -70,40 +105,35 @@ class KeysPanel : BasePanel<KeysExplorer>
 
 	public override void UIRenameFile(RenameFileEventArgs args)
 	{
-		var newName = Far.Api.Input("New name", "Key", "Rename key", args.File.Name);
-		if (newName is null)
+		var input = Explorer.GetNameInput(args.File);
+
+		var ui = new InputBox2
+		{
+			Text1 = input.Name,
+			Text2 = input.Prefix,
+			Prompt2 = "Prefix",
+			History1 = Host.History.Key,
+			History2 = Host.History.Prefix,
+		};
+
+		if (args.File.IsDirectory)
+		{
+			ui.Title = "Rename folder";
+			ui.Prompt1 = "New folder";
+		}
+		else
+		{
+			ui.Title = "Rename key";
+			ui.Prompt1 = "New key";
+		}
+
+		if (!ui.Show())
 		{
 			args.Result = JobResult.Ignore;
 			return;
 		}
 
-		args.Data = newName;
+		args.Data = new Files.ArgsDataName($"{ui.Text2}{ui.Text1}");
 		Explorer.RenameFile(args);
-	}
-
-	void DoEnter()
-	{
-		var file = CurrentFile;
-		if (file is null)
-			return;
-
-		var args = new ExploreDirectoryEventArgs( ExplorerModes.None, file);
-		var explorer2 = Explorer.ExploreDirectory(args);
-		if (explorer2 is null)
-			return;
-
-		explorer2.OpenPanelChild(this);
-	}
-
-	public override bool UIKeyPressed(KeyInfo key)
-	{
-		switch (key.VirtualKeyCode)
-		{
-			case KeyCode.Enter when key.Is():
-				DoEnter();
-				return true;
-		}
-
-		return base.UIKeyPressed(key);
 	}
 }

@@ -1,5 +1,45 @@
 ﻿https://www.nuget.org/packages/FarNet.RedisKit
 
+= 0.2.6 =
+
+Add menu item "Copy key to clipboard".
+
+Remove `rk:`, to avoid misuse. Use `rk:keys` instead.
+
+= 0.2.5 =
+
+rk:tree
+- Add `FolderSymbols` to settings
+- Respect `root` on navigating up
+
+= 0.2.4 =
+
+Use name and prefix fields in keys panel input dialogs.
+
+Support renaming rk:tree folders.
+
+= 0.2.3 =
+
+Rework navigation in rk:tree panel.
+
+= 0.2.2 =
+
+Amend navigation in rk:tree panel.
+
+= 0.2.1 =
+
+rk:tree minor tweaks.
+
+= 0.2.0 =
+
+New command `rk:tree` uses the specified separator or ":" in order to infer the
+key folder tree and opens the keys panel with folders.
+
+= 0.1.5 =
+
+String editors use `ext` as file type for keys like `*.ext`.
+File types are recognized by Colorer and some other tools.
+
 = 0.1.4 =
 
 Keys panel: F7 creates a new string key.

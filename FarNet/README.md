@@ -385,18 +385,18 @@ Selecting a not added drawer adds it to the current editor.
 
 [Contents]
 
-This menu shows the list of opened editors sorted by the most recent activity.
-E.g. the first item is the current editor, the second item is the previously
-active and so on.
+This command makes the list of opened editors for selecting one of them. If the
+choice is obvious then the editor is automatically selected and activated.
+Otherwise, the menu is shown for manual selection.
 
 *********************************************************************
 ## Viewers menu
 
 [Contents]
 
-This menu shows the list of opened viewers sorted by the most recent activity.
-E.g. the first item is the current viewer, the second item is the previously
-active and so on.
+This command makes the list of opened viewers for selecting one of them. If the
+choice is obvious then the viewer is automatically selected and activated.
+Otherwise, the menu is shown for manual selection.
 
 *********************************************************************
 ## Config menu

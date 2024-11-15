@@ -1,7 +1,7 @@
 ﻿using FarNet;
 using System.Linq;
 
-namespace RedisKit;
+namespace RedisKit.Panels;
 
 class SetPanel : BasePanel<SetExplorer>
 {
@@ -21,10 +21,6 @@ class SetPanel : BasePanel<SetExplorer>
 	}
 
 	protected override string HelpTopic => "set-panel";
-
-	internal override void AddMenu(IMenu menu)
-	{
-	}
 
 	public override void UICloneFile(CloneFileEventArgs args)
 	{

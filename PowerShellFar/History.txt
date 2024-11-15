@@ -1,5 +1,56 @@
 https://www.nuget.org/packages/FarNet.PowerShellFar
 
+= 8.1.25 =
+
+FarNet 8.1.14
+
+Tweaks in Redis scripts.
+
+= 8.1.24 =
+
+Fix System.Drawing https://github.com/PowerShell/PowerShell/discussions/24562
+
+= 8.1.23 =
+
+Microsoft.PowerShell.SDK 7.4.6
+
+Amend `ArgumentCompleters.ps1` magic ForEach, Where
+
+= 8.1.22 =
+
+Rename Reformat-Selection-.ps1 to Reformat-Selection.ps1
+Improve Reformat-Selection.ps1 algorithm.
+
+= 8.1.21 =
+
+Microsoft.PowerShell.SDK 7.4.5
+
+= 8.1.20 =
+
+Requires FarNet 8.1.11
+
+Amended work with tasks.
+
+= 8.1.19 =
+
+Microsoft.PowerShell.SDK 7.4.4
+
+Support `prompt` in nested prompt editor consoles.
+
+= 8.1.18 =
+
+`PromptForChoice`: trim end of caption and message.
+
+= 8.1.17 =
+
+Requires FarNet 8.1.9
+
+Amend PS host ReadLine and PromptForChoice.
+
+= 8.1.16 =
+
+Microsoft.PowerShell.SDK 7.4.3
+
 = 8.1.15 =
 
 Fix NRE on CtrlC in prompts.

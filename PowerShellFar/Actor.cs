@@ -226,8 +226,8 @@ public sealed partial class Actor
 
 		try
 		{
-			// complete the task
-			task.GetAwaiter().GetResult();
+			// complete
+			task.Await();
 		}
 		finally
 		{
@@ -365,8 +365,8 @@ public sealed partial class Actor
 	/// </remarks>
 	public void ShowInteractive(OpenMode mode = OpenMode.Modal)
 	{
-		var inter = Interactive.Create(false);
-		inter?.Editor.Open(mode);
+		var inter = Interactive.Create();
+		inter.Editor.Open(mode);
 	}
 
 	/// <summary>
