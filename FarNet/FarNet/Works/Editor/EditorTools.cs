@@ -1,12 +1,4 @@
 ﻿
-// FarNet plugin for Far Manager
-// Copyright (c) Roman Kuzmin
-
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Threading.Tasks;
-
 namespace FarNet.Works;
 #pragma warning disable 1591
 
@@ -123,81 +115,55 @@ public static class EditorTools
 	const string MenuHotkeys = "1234567890abcdefghijklmnopqrstuvwxyz";
 	const string MenuItemFormat = "&{0}. {1}";
 
-	public static void ShowEditorsMenu()
+	public static void ShowWindowsMenu()
 	{
 		if (Far.Api.Window.IsModal)
 			return;
 
-		var editors = Far.Api.Editors();
+		var windows = Far.Api.Editors().Cast<object>()
+			.Concat(Far.Api.Viewers().Cast<object>())
+			.OrderByDescending(w => w is IEditor e ? e.TimeOfGotFocus : ((IViewer)w).TimeOfGotFocus)
+			.ToList();
 
-		int head = Far.Api.Window.Kind == WindowKind.Editor ? 1 : 0;
-		int tail = editors.Length - 1;
+		int head = Far.Api.Window.Kind == WindowKind.Editor || Far.Api.Window.Kind == WindowKind.Viewer ? 1 : 0;
+		int tail = windows.Count - 1;
 
 		if (head > tail)
 			return;
 
 		if (head == tail)
 		{
-			editors[head].Activate();
+			var window = windows[head];
+			if (window is IEditor e)
+				e.Activate();
+			else
+				((IViewer)window).Activate();
 			return;
 		}
 
 		var menu = Far.Api.CreateMenu();
-		menu.HelpTopic = "editors-menu";
-		menu.Title = "Editors";
+		menu.HelpTopic = "windows-menu";
+		menu.Title = "Windows";
 
 		int index = -1;
 		for (int i = head; i <= tail; ++i)
 		{
 			++index;
-			var editor = editors[i];
+			var window = windows[i];
 			var name = string.Format(
 				MenuItemFormat,
-				index < MenuHotkeys.Length ? MenuHotkeys.Substring(index, 1) : " ",
-				editor.Title);
-			menu.Add(name).Data = editor;
+				index < MenuHotkeys.Length ? MenuHotkeys[index] : ' ',
+				window is IEditor e ? $"Edit: {e.Title}" : $"View: {((IViewer)window).Title}");
+			menu.Add(name).Data = window;
 		}
 
 		if (menu.Show())
-			((IEditor)menu.SelectedData!).Activate();
-	}
-
-	public static void ShowViewersMenu()
-	{
-		if (Far.Api.Window.IsModal)
-			return;
-
-		var viewers = Far.Api.Viewers();
-
-		int head = Far.Api.Window.Kind == WindowKind.Viewer ? 1 : 0;
-		int tail = viewers.Length - 1;
-
-		if (head > tail)
-			return;
-
-		if (head == tail)
 		{
-			viewers[head].Activate();
-			return;
+			var window = menu.SelectedData!;
+			if (window is IEditor e)
+				e.Activate();
+			else
+				((IViewer)window).Activate();
 		}
-
-		var menu = Far.Api.CreateMenu();
-		menu.HelpTopic = "viewers-menu";
-		menu.Title = "Viewers";
-
-		int index = -1;
-		for (int i = head; i <= tail; ++i)
-		{
-			++index;
-			var viewer = viewers[i];
-			var name = string.Format(
-				MenuItemFormat,
-				index < MenuHotkeys.Length ? MenuHotkeys.Substring(index, 1) : " ",
-				viewer.FileName);
-			menu.Add(name).Data = viewer;
-		}
-
-		if (menu.Show())
-			((IViewer)menu.SelectedData!).Activate();
 	}
 }

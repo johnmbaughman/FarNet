@@ -1,14 +1,6 @@
-﻿
-// FarNet plugin for Far Manager
-// Copyright (c) Roman Kuzmin
-
-using System;
-using System.Collections.Generic;
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Diagnostics;
-using System.IO;
 using System.Reflection;
-using System.Xml.Linq;
 
 namespace FarNet.Works;
 #pragma warning disable 1591
@@ -30,8 +22,12 @@ public class ModuleLoader
 		// config
 		var config = Config.Default.GetData();
 
-		// directories
-		foreach (string dir in Directory.GetDirectories(rootPath))
+		// get directories, ignore missing
+		string[] directories;
+		try { directories = Directory.GetDirectories(rootPath); } catch (DirectoryNotFoundException) { return; }
+
+		// load directories
+		foreach (string dir in directories)
 		{
 			try
 			{
@@ -146,28 +142,28 @@ public class ModuleLoader
 						{
 							var it = (ProxyCommand)action;
 							it.LoadConfig(module);
-							Host.Instance.RegisterProxyCommand(it);
+							Far2.Api.RegisterProxyCommand(it);
 						}
 						break;
 					case ModuleItemKind.Drawer:
 						{
 							var it = (ProxyDrawer)action;
 							it.LoadConfig(module);
-							Host.Instance.RegisterProxyDrawer(it);
+							Far2.Api.RegisterProxyDrawer(it);
 						}
 						break;
 					case ModuleItemKind.Editor:
 						{
 							var it = (ProxyEditor)action;
 							it.LoadConfig(module);
-							Host.Instance.RegisterProxyEditor(it);
+							Far2.Api.RegisterProxyEditor(it);
 						}
 						break;
 					case ModuleItemKind.Tool:
 						{
 							var it = (ProxyTool)action;
 							it.LoadConfig(module);
-							Host.Instance.RegisterProxyTool(it);
+							Far2.Api.RegisterProxyTool(it);
 						}
 						break;
 					default:
@@ -204,7 +200,7 @@ public class ModuleLoader
 		{
 			var it = new ProxyCommand(manager, type);
 			it.LoadConfig(config);
-			Host.Instance.RegisterProxyCommand(it);
+			Far2.Api.RegisterProxyCommand(it);
 			action = it;
 		}
 		// drawer
@@ -212,7 +208,7 @@ public class ModuleLoader
 		{
 			var it = new ProxyDrawer(manager, type);
 			it.LoadConfig(config);
-			Host.Instance.RegisterProxyDrawer(it);
+			Far2.Api.RegisterProxyDrawer(it);
 			action = it;
 		}
 		// editor
@@ -220,7 +216,7 @@ public class ModuleLoader
 		{
 			var it = new ProxyEditor(manager, type);
 			it.LoadConfig(config);
-			Host.Instance.RegisterProxyEditor(it);
+			Far2.Api.RegisterProxyEditor(it);
 			action = it;
 		}
 		// tool
@@ -228,7 +224,7 @@ public class ModuleLoader
 		{
 			var it = new ProxyTool(manager, type);
 			it.LoadConfig(config);
-			Host.Instance.RegisterProxyTool(it);
+			Far2.Api.RegisterProxyTool(it);
 			action = it;
 		}
 		// host
@@ -252,17 +248,6 @@ public class ModuleLoader
 		_Cache.Set(manager.AssemblyPath, manager);
 	}
 
-	public static bool CanExit()
-	{
-		foreach (ModuleManager manager in _Managers.Values)
-		{
-			if (manager.GetLoadedModuleHost() != null && !manager.GetLoadedModuleHost().CanExit())
-				return false;
-		}
-
-		return true;
-	}
-
 	public static List<IModuleManager> GatherModuleManagers()
 	{
 		var result = new List<IModuleManager>(_Managers.Count);
@@ -279,7 +264,7 @@ public class ModuleLoader
 
 		// 1) gather its actions
 		var actions = new List<ProxyAction>();
-		foreach (IModuleAction action in Host.Actions.Values)
+		foreach (IModuleAction action in Far2.Actions.Values)
 			if (ReferenceEquals(action.Manager, manager))
 				actions.Add((ProxyAction)action);
 
@@ -296,7 +281,7 @@ public class ModuleLoader
 			_Managers.Values[0].Unregister();
 
 		// actions are removed
-		Debug.Assert(Host.Actions.Count == 0);
+		Debug.Assert(Far2.Actions.Count == 0);
 	}
 
 	public static IModuleManager GetModuleManager(string name)

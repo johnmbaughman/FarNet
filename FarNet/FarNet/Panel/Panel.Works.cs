@@ -18,7 +18,7 @@ public interface IPanelWorks : IPanel
 
 	string StartDirectory { get; }
 
-	string Title { get; set; }
+	string? Title { get; set; }
 
 	Panel TargetPanel { get; }
 	#endregion
@@ -57,12 +57,6 @@ public interface IPanelWorks : IPanel
 	void PostFile(FarFile file);
 
 	void PostName(string? name);
-	#endregion
-
-	#region Other Info
-	string FormatName { get; set; }
-
-	string HostFile { get; set; }
 	#endregion
 
 	DataItem[] InfoItems { get; set; }

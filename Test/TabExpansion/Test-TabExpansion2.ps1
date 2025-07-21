@@ -1,20 +1,20 @@
 ﻿<#
 .Synopsis
-	Test-TabExpansion2-.ps1 in pwsh and powershell.
+	Test-TabExpansion2.far.ps1 in pwsh and powershell.
 #>
 
 [CmdletBinding()]
 param(
 	[ValidateSet('pwsh', 'powershell')]
-	[string]$Shell = 'pwsh'
+	[string]$pwsh = 'pwsh'
 	,
 	[switch]$NoExit
 )
 
 $ErrorActionPreference = 1
 
-$oldPSModulePath = $env:PSModulePath
-$env:PSModulePath = [Environment]::GetEnvironmentVariable('PSModulePath', 'user')
+$PSModulePath = $env:PSModulePath
+$env:PSModulePath = [Environment]::GetEnvironmentVariable('PSModulePath', 'Machine')
 try {
 	$param = @(
 		if ($NoExit) {
@@ -22,13 +22,13 @@ try {
 		}
 		'-NoProfile',
 		'-Command',
-		'.\Test-TabExpansion2-.ps1'
+		'.\Test-TabExpansion2.far.ps1'
 	)
-	$process = Start-Process $Shell -ArgumentList $param -WorkingDirectory $PSScriptRoot -PassThru -Wait:(!$NoExit)
+	$process = Start-Process $pwsh -ArgumentList $param -WorkingDirectory $PSScriptRoot -PassThru -Wait:(!$NoExit)
 	if (!$NoExit -and $process.ExitCode) {
-		throw "Test TabExpansion2 failed in $Shell."
+		throw "Test TabExpansion2 failed in $pwsh."
 	}
 }
 finally {
-	$env:PSModulePath = $oldPSModulePath
+	$env:PSModulePath = $PSModulePath
 }

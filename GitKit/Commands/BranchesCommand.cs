@@ -1,13 +1,13 @@
-﻿using GitKit.Panels;
-using System.Data.Common;
+﻿using FarNet;
+using GitKit.Panels;
 
 namespace GitKit.Commands;
 
-sealed class BranchesCommand(DbConnectionStringBuilder parameters) : BaseCommand(parameters)
+sealed class BranchesCommand(CommandParameters parameters) : BaseCommand(parameters)
 {
 	public override void Invoke()
 	{
-		new BranchesExplorer(Repository)
+		new BranchesExplorer(GitDir)
 			.CreatePanel()
 			.Open();
 	}

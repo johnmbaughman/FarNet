@@ -1,25 +1,22 @@
 ﻿using FarNet;
-using GitKit.Extras;
-using System.Data.Common;
+using GitKit.About;
+using LibGit2Sharp;
 using System.IO;
 
 namespace GitKit.Commands;
 
-sealed class CDCommand : BaseCommand
+sealed class CDCommand(CommandParameters parameters) : BaseCommand(parameters)
 {
-	readonly string _path;
-
-	public CDCommand(DbConnectionStringBuilder parameters) : base(parameters)
-	{
-		_path = parameters.GetString(Parameter.Path, true) ?? string.Empty;
-	}
+	readonly string _path = parameters.GetString(Param.Path, ParameterOptions.ExpandVariables) ?? string.Empty;
 
 	public override void Invoke()
 	{
 		if (Far.Api.Window.Kind != WindowKind.Panels)
 			Far.Api.Window.SetCurrentAt(-1);
 
-		string path = Lib.ResolveRepositoryItemPath(Repository, _path);
+		using var repo = new Repository(GitDir);
+
+		string path = Lib.ResolveRepositoryItemPath(repo, _path);
 
 		if (File.Exists(path))
 			Far.Api.Panel!.GoToPath(path);

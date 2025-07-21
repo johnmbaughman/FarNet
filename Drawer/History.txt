@@ -1,5 +1,15 @@
 ﻿https://www.nuget.org/packages/FarNet.Drawer
 
+= 4.2.1 =
+
+CurrentWordDrawer
+- use background color from settings
+
+= 4.2.0 =
+
+Requires FarNet 9.0.11, uses .NET 9.
+String to span refactoring.
+
 = 4.1.0 =
 
 New Tabs drawer.

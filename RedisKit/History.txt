@@ -1,5 +1,76 @@
 ﻿https://www.nuget.org/packages/FarNet.RedisKit
 
+= 0.6.2 =
+
+Requires FarNet.Redis 0.17.1.
+
+= 0.6.1 =
+
+Requires FarNet 9.0.21.
+
+Amend parameter `db`, the default should be -1.
+
+Add menu "Configuration" for choosing the default from settings.
+
+= 0.6.0 =
+
+Requires FarNet.Redis 0.16.0 and Garnet 1.0.63, if used.
+
+Support multiple databases, add parameter `db` to `rk:` commands.
+
+= 0.5.1 =
+
+Requires FarNet.Redis 0.15.4
+
+Use sorted Hash and Set on editing.
+
+= 0.5.0 =
+
+Requires FarNet.Redis 0.15.3
+
+Support Hash editing as text.
+
+New command rk:json for editing as JSON.
+
+Use rules on what can be represented as text.
+
+= 0.4.0 =
+
+Keys panel and rk:edit command - support List and Set editing as text.
+
+= 0.3.6 =
+
+rk:hash
+- new parameter Eol tells to show field end of life times.
+
+Requires Garnet 1.0.53, if used.
+
+0.15.0
+
+= 0.3.5 =
+
+Requires FarNet 9.0.9, command refactoring.
+
+= 0.3.4 =
+
+Refactor panels.
+
+= 0.3.3 =
+
+Minor tweaks in help and code.
+
+= 0.3.2 =
+
+Tweak rk:tree getting files.
+
+= 0.3.1 =
+
+Requires FarNet 9.0.4, internal tweaks.
+
+= 0.3.0 =
+
+Requires FarNet 9.0.3, uses .NET 9.0, common CommandParameters
+
 = 0.2.6 =
 
 Add menu item "Copy key to clipboard".

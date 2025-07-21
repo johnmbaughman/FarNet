@@ -2,10 +2,9 @@
 // FarNet plugin for Far Manager
 // Copyright (c) Roman Kuzmin
 
-using System;
+using FarNet.Works;
 using System.Collections;
-using System.Collections.Generic;
-using System.IO;
+using System.Diagnostics.CodeAnalysis;
 
 namespace FarNet;
 
@@ -691,6 +690,11 @@ public abstract class IEditor : IEditorBase
 	public abstract IEditorBookmark Bookmark { get; }
 
 	/// <summary>
+	/// Gets the got focus time of the instance.
+	/// </summary>
+	public abstract DateTime TimeOfGotFocus { get; }
+
+	/// <summary>
 	/// Gets the opening time of the instance.
 	/// </summary>
 	public abstract DateTime TimeOfOpen { get; }
@@ -757,4 +761,35 @@ public abstract class IEditor : IEditorBase
 			}
 		}
 	}
+
+	/// <summary>
+	/// Gets the line text.
+	/// </summary>
+	/// <param name="line">Line index.</param>
+	[Experimental("FarNet250102")]
+	public unsafe ReadOnlySpan<char> GetLineText2(int line)
+	{
+		var (p, n) = Far2.Api.IEditorLineText(Id, line);
+		return new((char*)p, n);
+	}
+
+	/// <summary>
+	/// Sets the line text.
+	/// </summary>
+	/// <param name="line">Line index.</param>
+	/// <param name="text">Line text.</param>
+	[Experimental("FarNet250102")]
+	public unsafe void SetLineText2(int line, ReadOnlySpan<char> text)
+	{
+		fixed (char* p = text)
+		{
+			Far2.Api.IEditorLineText(Id, line, (IntPtr)p, text.Length);
+		}
+	}
+
+	/// <summary>
+	/// Gets the number of change events.
+	/// </summary>
+	[Experimental("FarNet250106")]
+	public abstract int ChangeCount { get; }
 }

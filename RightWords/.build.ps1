@@ -17,35 +17,21 @@ task build meta, {
 	exec { dotnet build -c $Configuration /p:FarHome=$FarHome }
 }
 
-task publish {
-	exec { dotnet publish "$ModuleName.csproj" -c $Configuration -o $ModuleRoot --no-build }
-},
-help,
-resgen
+task publish help, resgen
 
-task help @{
-	Inputs = 'README.md'
-	Outputs = "$ModuleRoot\RightWords.hlf"
-	Jobs = {
-		exec { pandoc.exe README.md --output=z.htm --from=gfm }
-		exec { HtmlToFarHelp from=z.htm to=$ModuleRoot\RightWords.hlf }
-		remove z.htm
-	}
+task help -Inputs README.md -Outputs $ModuleRoot\RightWords.hlf {
+	exec { pandoc.exe README.md --output=$env:TEMP\help.htm --from=gfm --no-highlight }
+	exec { HtmlToFarHelp from=$env:TEMP\help.htm to=$ModuleRoot\RightWords.hlf }
 }
 
 # https://github.com/nightroman/PowerShelf/blob/main/Invoke-Environment.ps1
-task resgen @{
-	Inputs = 'RightWords.restext', 'RightWords.ru.restext'
-	Outputs = "$ModuleRoot\RightWords.resources", "$ModuleRoot\RightWords.ru.resources"
-	Partial = $true
-	Jobs = {
-		begin {
-			$VsDevCmd = @(Get-Item "$env:ProgramFiles\Microsoft Visual Studio\2022\*\Common7\Tools\VsDevCmd.bat")
-			Invoke-Environment.ps1 -File ($VsDevCmd[0])
-		}
-		process {
-			exec {resgen.exe $_ $2}
-		}
+task resgen -Partial -Inputs RightWords.restext, RightWords.ru.restext -Outputs $ModuleRoot\RightWords.resources, $ModuleRoot\RightWords.ru.resources {
+	begin {
+		$VsDevCmd = @(Get-Item "$env:ProgramFiles\Microsoft Visual Studio\2022\*\Common7\Tools\VsDevCmd.bat")
+		Invoke-Environment.ps1 -File ($VsDevCmd[0])
+	}
+	process {
+		exec { resgen.exe $_ $2 }
 	}
 }
 
@@ -54,26 +40,26 @@ task clean {
 }
 
 task version {
-	($script:Version = switch -regex -file History.txt {'^= (\d+\.\d+\.\d+) =$' {$matches[1]; break}})
-	assert $script:Version
+	($Script:Version = Get-BuildVersion History.txt '^= (\d+\.\d+\.\d+) =$')
 }
 
 task meta -Inputs .build.ps1, History.txt -Outputs Directory.Build.props -Jobs version, {
 	Set-Content Directory.Build.props @"
 <Project>
-  <PropertyGroup>
-    <Company>https://github.com/nightroman/FarNet</Company>
-    <Copyright>Copyright (c) Roman Kuzmin</Copyright>
-    <Product>FarNet.$ModuleName</Product>
-    <Version>$Version</Version>
-    <Description>$Description</Description>
-  </PropertyGroup>
+	<PropertyGroup>
+		<Description>$Description</Description>
+		<Company>https://github.com/nightroman/FarNet</Company>
+		<Copyright>Copyright (c) Roman Kuzmin</Copyright>
+		<Product>FarNet.$ModuleName</Product>
+		<Version>$Version</Version>
+		<IncludeSourceRevisionInInformationalVersion>False</IncludeSourceRevisionInInformationalVersion>
+	</PropertyGroup>
 </Project>
 "@
 }
 
 task markdown {
-	assert (Test-Path $env:MarkdownCss)
+	requires -Path $env:MarkdownCss
 	exec { pandoc.exe @(
 		'README.md'
 		'--output=README.htm'
@@ -86,16 +72,11 @@ task markdown {
 }
 
 task package markdown, version, {
-	$dll = Get-Item "$ModuleRoot\RightWords.dll"
-	assert ($dll.VersionInfo.FileVersion -match '^(\d+\.\d+\.\d+)\.0$')
-	equals ($matches[1]) $script:Version
-
 	remove z
 	$toModule = mkdir "z\tools\FarHome\FarNet\Modules\$ModuleName"
 
 	# module
-	exec { robocopy $ModuleRoot $toModule /s /xf *.pdb } (0..2)
-	equals 7 (Get-ChildItem $toModule -Recurse -File).Count
+	exec { robocopy $ModuleRoot $toModule /s /xf *.pdb } 1
 
 	# meta
 	Copy-Item -Destination z @(
@@ -107,18 +88,32 @@ task package markdown, version, {
 	Copy-Item -Destination $toModule @(
 		"README.htm"
 		"History.txt"
-		"..\LICENSE"
 		"RightWords.macro.lua"
+		"..\LICENSE"
 	)
+
+	Assert-SameFile.ps1 -Result (Get-ChildItem $toModule -Recurse -File -Name) -Text -View $env:MERGE @'
+History.txt
+LICENSE
+README.htm
+RightWords.dll
+RightWords.hlf
+RightWords.macro.lua
+RightWords.resources
+RightWords.ru.resources
+WeCantSpell.Hunspell.dll
+'@
 }
 
 task nuget package, version, {
+	equals $Version (Get-Item "$ModuleRoot\$ModuleName.dll").VersionInfo.ProductVersion
+
 	Set-Content z\Package.nuspec @"
 <?xml version="1.0"?>
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
 	<metadata>
 		<id>FarNet.RightWords</id>
-		<version>$script:Version</version>
+		<version>$Version</version>
 		<authors>Roman Kuzmin</authors>
 		<owners>Roman Kuzmin</owners>
 		<projectUrl>https://github.com/nightroman/FarNet</projectUrl>

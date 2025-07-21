@@ -1,5 +1,39 @@
 https://www.nuget.org/packages/FarNet.FSharpFar
 
+= 5.1.2 =
+
+Requires FarNet 9.0.17, refactoring.
+
+= 5.1.1 =
+
+FSharp.Core 9.0.101, FSharp.Compiler.Service 43.9.101
+
+= 5.1.0 =
+
+Requires FarNet 9.0.9, command refactoring.
+
+Breaking change:
+Use new commands: `fs:exec`, `fs:open`, `fs:compile`, `fs:project`
+instead of old: `fs: exec:`, `fs: open:`, `fs: compile:`, `fs: project:`
+
+= 5.0.2 =
+
+Rework fsx assembly resolution.
+
+= 5.0.1 =
+
+Tweak fsx loading.
+
+= 5.0.0 =
+
+Requires .NET 9.0, FarNet 9.0.0
+
+= 4.1.0 =
+
+F# 9
+FSharp.Core 9.0.100
+FSharp.Compiler.Service 43.9.100
+
 = 4.0.1 =
 
 FSharp.Core 8.0.200

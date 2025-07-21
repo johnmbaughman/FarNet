@@ -1,5 +1,46 @@
 https://www.nuget.org/packages/FarNet.RightWords
 
+= 5.3.0 =
+
+Support handling word prefixes like "sub", "un".
+New setting "Prefixes".
+
+Amend 5.2.3
+
+= 5.2.4 =
+
+Amend 5.2.3
+
+= 5.2.3 =
+
+WeCantSpell.Hunspell 6.0.0
+
+Avoid some allocations.
+
+= 5.2.2 =
+
+Make it a simple module, not ALC.
+
+= 5.2.1 =
+
+Requires FarNet 9.0.12
+
+Use colors from cache on no changes.
+
+= 5.2.0 =
+
+Requires FarNet 9.0.11, uses new FarNet methods.
+
+String to span refactoring for better performance.
+
+Settings changes:
+- `WordRegex` capturing groups are not used for removing "noise".
+- `RemoveRegex` is used instead to remove "noise" from found words.
+
+= 5.1.0 =
+
+Requires FarNet 9, uses .NET 9.0, WeCantSpell.Hunspell 5.2.1
+
 = 5.0.0 =
 
 Requires FarNet 8

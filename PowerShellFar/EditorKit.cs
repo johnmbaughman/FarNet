@@ -1,15 +1,9 @@
 
-// PowerShellFar module for Far Manager
-// Copyright (c) Roman Kuzmin
-
 using FarNet;
 using FarNet.Forms;
 using FarNet.Tools;
-using System;
-using System.Collections.Generic;
+using System.Collections;
 using System.Collections.Specialized;
-using System.IO;
-using System.Linq;
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
 using System.Text;
@@ -52,9 +46,10 @@ static class EditorKit
 	/// <seealso cref="Actor.ExpandCode"/>
 	public static void ExpandCode(ILine? editLine, Runspace? runspace)
 	{
-		using var IgnoreApplications = new FarHost.IgnoreApplications();
+		using FarHost.IgnoreApplications ignoreApplications = new();
 
 		InitTabExpansion();
+		A.Psf.SyncPaths();
 
 		// hot line
 		if (editLine is null)
@@ -67,10 +62,10 @@ static class EditorKit
 			}
 		}
 
+		ReadOnlySpan<char> prefix = default;
+		ReadOnlySpan<char> inputScript;
 		int lineOffset = 0;
-		string inputScript;
 		int cursorColumn;
-		var prefix = string.Empty;
 
 		IEditor? editor = null;
 		InteractiveArea? area;
@@ -128,16 +123,13 @@ static class EditorKit
 			inputScript = editLine.Text;
 			cursorColumn = editLine.Caret;
 
-			//_200805_i3 Deal with auto complete selection.
-			// use selection start as cursor column
+			// 2020-08-05-0001 mind auto complete selection, use selection start as cursor column
 			var selectionSpan = editLine.SelectionSpan;
 			if (cursorColumn == selectionSpan.End)
 				cursorColumn = selectionSpan.Start;
 
-			// process prefix, used to be just for panels but it is needed in dialogs, too
-			var split = Zoo.SplitCommandWithPrefix(inputScript);
-			prefix = split.Key;
-			inputScript = split.Value;
+			// process prefix, accepts any
+			FarNet.Works.Kit.SplitCommandWithPrefix(inputScript, out prefix, out inputScript, (_) => true);
 
 			// correct caret
 			cursorColumn -= prefix.Length;
@@ -159,26 +151,27 @@ static class EditorKit
 
 			var result = (CommandCompletion)ps
 				.AddCommand("TabExpansion2", true)
-				.AddArgument(inputScript)
+				.AddArgument(inputScript.ToString())
 				.AddArgument(cursorColumn)
 				.Invoke()[0].BaseObject;
 
 			// results
-			var matches = result.CompletionMatches;
 			int replacementIndex = result.ReplacementIndex;
 			int replacementLength = result.ReplacementLength;
 			replacementIndex -= lineOffset;
 			if (replacementIndex < 0 || replacementLength < 0)
 				return;
 
-			// original or joined list
-			IReadOnlyList<CompletionResult> words = matches;
+			// original or joined list // mind null matches
+			IReadOnlyList<CompletionResult> words = result.CompletionMatches;
+			if (words is null)
+				return;
 
 			// variables from the current editor
 			if (editLine.WindowKind == WindowKind.Editor)
 			{
 				// replaced text
-				var lastWord = inputScript.Substring(lineOffset + replacementIndex, replacementLength);
+				var lastWord = inputScript.Slice(lineOffset + replacementIndex, replacementLength).ToString();
 
 				//! as TabExpansion.ps1 but ends with \$(\w*)$
 				var matchVar = MyRegex.CompleteVariable().Match(lastWord);
@@ -222,7 +215,9 @@ static class EditorKit
 			// expand
 			ExpandText(editLine, replacementIndex + prefix.Length, replacementLength, words);
 		}
-		catch (RuntimeException) { }
+		catch (RuntimeException)
+		{
+		}
 	}
 
 	public static void ExpandText(ILine editLine, int replacementIndex, int replacementLength, IReadOnlyList<CompletionResult> words)
@@ -274,22 +269,18 @@ static class EditorKit
 			word = (string)menu.Items[menu.Selected].Data!;
 		}
 
-		// get original text and custom mode
-		var text = editLine.Text;
+		// line text and head to keep
+		var text = editLine.Text.AsSpan();
+		var head = text[..replacementIndex];
 
-		//_200805_i3 Deal with auto complete selection.
-		// remove selected text before replacement
+		// 2020-08-05-0001 mind auto complete selection, skip selected text
 		var selectionSpan = editLine.SelectionSpan;
-		if (selectionSpan.Start == replacementIndex + replacementLength)
-			text = string.Concat(text.AsSpan(0, selectionSpan.Start), text.AsSpan(selectionSpan.End, text.Length - selectionSpan.End));
-
-		// replace
-
-		// head before replaced part
-		string head = text[..replacementIndex];
+		var tail = selectionSpan.Start == replacementIndex + replacementLength ?
+			text[selectionSpan.End..] :
+			text[(replacementIndex + replacementLength)..];
 
 		// set new text = old head + expanded + old tail
-		editLine.Text = string.Concat(head, word, text.AsSpan(replacementIndex + replacementLength));
+		editLine.Text = string.Concat(head, word, tail);
 
 		// set caret
 		editLine.Caret = head.Length + word.Length;
@@ -457,6 +448,7 @@ static class EditorKit
 		string code;
 		var from = Far.Api.Window.Kind;
 
+		OutputWriter? writer = null;
 		if (from == WindowKind.Editor)
 		{
 			var editor = Far.Api.Editor!;
@@ -479,10 +471,35 @@ static class EditorKit
 			code = line.SelectedText;
 			if (string.IsNullOrEmpty(code))
 				code = line.Text;
+			writer = new ConsoleOutputWriter();
 		}
 
-		var split = Zoo.SplitCommandWithPrefix(code);
-		A.Psf.Run(new RunArgs(split.Value));
+		// command
+		FarNet.Works.Kit.SplitCommandWithPrefix(code, out _, out var command, Entry.IsMyPrefix);
+
+		// history
+		if (from == WindowKind.Panels)
+			HistoryCommands.AddSessionLine(command.ToString());
+
+		A.Psf.SyncPaths();
+		A.Psf.Run(new RunArgs(command.ToString()) { Writer = writer });
+	}
+
+	internal static void PlayNativeEnter()
+	{
+		var text = Far.Api.CommandLine.Text;
+		var caret = Far.Api.CommandLine.Caret;
+		var span = Far.Api.CommandLine.SelectionSpan;
+
+		Far.Api.CommandLine.Text = string.Empty;
+		Far.Api.PostMacro("Keys 'Enter'");
+		Far.Api.PostJob(() =>
+		{
+			Far.Api.CommandLine.Text = text;
+			Far.Api.CommandLine.Caret = caret;
+			if (span.Length >= 0)
+				Far.Api.CommandLine.SelectText(span.Start, span.End);
+		});
 	}
 
 	// PSF sets the current directory and location to the script directory.
@@ -551,16 +568,22 @@ static class EditorKit
 		}
 	}
 
-	//! Use PowerShell for getting tasks, script block fails with weird NRE on exit.
+	// !! Use PS for getting tasks, script block fails with odd NRE on exit.
+
+	// !! The task must be in the same file and strictly above or at the caret,
+	// that is avoid unexpected redefined tasks below the caret and do not run
+	// implicit dot-tasks as we used to.
+
 	public static void InvokeTaskFromEditor(IEditor editor)
 	{
+		const string MyTitle = "Invoke-Build task";
+
 		var fileName = editor.FileName;
 
 		void GoToError(RuntimeException ex, bool redraw)
 		{
-			//! InvocationInfo null on CtrlC in prompts
-			if (ex.ErrorRecord.InvocationInfo is { } ii &&
-				string.Equals(fileName, ii.ScriptName, StringComparison.OrdinalIgnoreCase))
+			//! InvocationInfo is null on CtrlC in prompts
+			if (ex.ErrorRecord.InvocationInfo is { } ii && fileName.Equals(ii.ScriptName, StringComparison.OrdinalIgnoreCase))
 			{
 				editor.GoTo(ii.OffsetInLine - 1, ii.ScriptLineNumber - 1);
 				if (redraw)
@@ -568,35 +591,111 @@ static class EditorKit
 			}
 		}
 
-		try
+		var caretLineNumber = editor.Caret.Y + 1;
+		(string?, int) FindCaretTask(ICollection tasks)
 		{
-			// get tasks
-			var ps = A.Psf.NewPowerShell();
-			ps.AddScript("Invoke-Build ?? $args[0]").AddArgument(fileName);
-			var tasks = (OrderedDictionary)ps.Invoke()[0].BaseObject;
-
-			// find the caret task
-			var taskName = ".";
-			var lineIndex = editor.Caret.Y;
-			foreach (PSObject pso in tasks.Values)
+			PSObject? bestMatch = null;
+			int bestMatchLineNumber = -1;
+			foreach (PSObject pso in tasks)
 			{
 				var ii = (InvocationInfo)pso.Properties["InvocationInfo"].Value;
+
+				// skip different file
 				if (!string.Equals(fileName, ii.ScriptName, StringComparison.OrdinalIgnoreCase))
 					continue;
 
-				if ((ii.ScriptLineNumber - 1) > lineIndex)
+				// stop on any task below the caret
+				if (ii.ScriptLineNumber > caretLineNumber)
 					break;
 
-				taskName = (string)pso.Properties["Name"].Value;
+				// keep the best match
+				bestMatch = pso;
+				bestMatchLineNumber = ii.ScriptLineNumber;
+			}
+			return ((string?)bestMatch?.Properties["Name"].Value, bestMatchLineNumber);
+		}
+
+		try
+		{
+			// get tasks
+			using var ps = A.Psf.NewPowerShell().AddScript("""
+				Invoke-Build ?? $args[0] -Result:Result
+				, $Result.Redefined
+				""")
+				.AddArgument(fileName);
+
+			var res = ps.Invoke();
+			if (res.Count != 2)
+				throw new InvalidOperationException($"Unexpected result count: {res.Count}");
+
+			var goodTasksDic = (OrderedDictionary)res[0].BaseObject;
+			var goodTasks = goodTasksDic.Values;
+			var (goodTaskName, goodTaskLineNumber) = FindCaretTask(goodTasks);
+
+			var dupeTasks = (object[])res[1].BaseObject;
+			var (dupeTaskName, dupeTaskLineNumber) = FindCaretTask(dupeTasks);
+
+			// no dupe or good task?
+			if (dupeTaskName is null && goodTaskName is null)
+			{
+				Far.Api.Message(
+					"Move the caret to a task to invoke.",
+					MyTitle,
+					MessageOptions.LeftAligned);
+
+				return;
 			}
 
+			// dupe task and no good task better than dupe?
+			if (dupeTaskName is { } && goodTaskLineNumber < dupeTaskLineNumber)
+			{
+				// find redefined task
+				var pso = goodTasksDic[dupeTaskName]!.BaseObject(out var custom);
+				var ii = (InvocationInfo)custom!.Properties["InvocationInfo"].Value;
+
+				// go to or invoke?
+				var answer = Far.Api.Message($"""
+					The task '{dupeTaskName}' is redefined at
+					{ii.ScriptName}:{ii.ScriptLineNumber}
+					""",
+					MyTitle,
+					MessageOptions.LeftAligned,
+					["&Go to redefined", "&Invoke redefined"]);
+
+				switch (answer)
+				{
+					case 0:
+						if (fileName.Equals(ii.ScriptName, StringComparison.OrdinalIgnoreCase))
+						{
+							// go to same file
+							editor.GoTo(ii.OffsetInLine - 1, ii.ScriptLineNumber - 1);
+							editor.Redraw();
+						}
+						else
+						{
+							// open another file
+							editor = Far.Api.CreateEditor();
+							editor.FileName = ii.ScriptName;
+							editor.GoTo(ii.OffsetInLine - 1, ii.ScriptLineNumber - 1);
+							editor.Open();
+						}
+						return;
+					case 1:
+						goodTaskName = dupeTaskName;
+						break;
+					default:
+						return;
+				}
+			}
+
+			// invoke task with console output and wait for Esc
 			Far.Api.UI.ShowUserScreen();
 			try
 			{
 				// invoke task
 				var args = new RunArgs("Invoke-Build $args[0] $args[1]")
 				{
-					Arguments = [taskName, fileName],
+					Arguments = [goodTaskName!, fileName],
 					Writer = new ConsoleOutputWriter()
 				};
 				A.Psf.Run(args);
@@ -606,15 +705,8 @@ static class EditorKit
 				if (args.Reason is RuntimeException ex)
 					GoToError(ex, false);
 
-				Far.Api.UI.SetProgressState(TaskbarProgressBarState.Paused);
-				Far.Api.UI.WindowTitle = "Press Esc to continue...";
-				while (true)
-				{
-					var key = Far.Api.UI.ReadKey(ReadKeyOptions.IncludeKeyDown | ReadKeyOptions.IncludeKeyUp);
-					if (key.VirtualKeyCode == KeyCode.Escape)
-						break;
-				}
-				Far.Api.UI.SetProgressState(TaskbarProgressBarState.NoProgress);
+				// like `pause`
+				new UI.ReadLine(new() { Prompt = "Press Enter to continue..." }).Show();
 			}
 			finally
 			{
@@ -625,7 +717,10 @@ static class EditorKit
 		{
 			// it is a build script issue more likely, go to its position and redraw, show the simple message
 			GoToError(ex, true);
-			Far.Api.Message(ex.Message, "Invoke-Build task", MessageOptions.Warning | MessageOptions.LeftAligned);
+			Far.Api.Message(
+				ex.Message,
+				MyTitle,
+				MessageOptions.LeftAligned | MessageOptions.Warning);
 		}
 	}
 

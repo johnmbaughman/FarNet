@@ -29,12 +29,11 @@ task clean {
 }
 
 task version {
-	($script:Version = switch -regex -file History.txt { '^= (\d+\.\d+\.\d+) =$' { $matches[1]; break } })
-	assert $script:Version
+	($Script:Version = Get-BuildVersion History.txt '^= (\d+\.\d+\.\d+) =$')
 }
 
 task markdown {
-	assert (Test-Path $env:MarkdownCss)
+	requires -Path $env:MarkdownCss
 	exec { pandoc.exe @(
 		'README.md'
 		'--output=README.htm'
@@ -81,29 +80,20 @@ task package version, markdown, {
 		"..\LICENSE"
 	)
 
-	$result = Get-ChildItem $toModule -Recurse -File -Name | Out-String
-	$sample = @'
+	Assert-SameFile.ps1 -Text -View $env:MERGE -Result (Get-ChildItem $toModule -Recurse -File -Name) -Sample @'
 FolderChart.deps.json
 FolderChart.dll
-FolderChart.runtimeconfig.json
 History.txt
 LICENSE
 README.htm
-System.Configuration.ConfigurationManager.dll
 System.Data.OleDb.dll
 System.Data.SqlClient.dll
-System.Diagnostics.EventLog.dll
-System.Diagnostics.PerformanceCounter.dll
-System.Security.Cryptography.ProtectedData.dll
 System.Windows.Forms.DataVisualization.dll
-runtimes\win\lib\net8.0\System.Data.OleDb.dll
-runtimes\win\lib\net8.0\System.Diagnostics.EventLog.dll
-runtimes\win\lib\net8.0\System.Diagnostics.PerformanceCounter.dll
-runtimes\win\lib\netcoreapp2.1\System.Data.SqlClient.dll
+runtimes\win\lib\net8.0\System.Data.SqlClient.dll
+runtimes\win\lib\net9.0\System.Data.OleDb.dll
 runtimes\win-x64\native\sni.dll
 runtimes\win-x86\native\sni.dll
 '@
-	Assert-SameFile.ps1 -Text $sample $result $env:MERGE
 }
 
 task nuget package, {

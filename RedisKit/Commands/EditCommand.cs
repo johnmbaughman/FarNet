@@ -1,36 +1,108 @@
 ﻿using FarNet;
+using FarNet.Redis;
 using StackExchange.Redis;
-using System;
-using System.Data.Common;
-using System.IO;
 
 namespace RedisKit.Commands;
 
-sealed class EditCommand(DbConnectionStringBuilder parameters) : BaseCommand(parameters)
+sealed class EditCommand : BaseCommand
 {
-	readonly string _key = parameters.GetRequiredString(Host.Param.Key);
+	readonly RedisKey _key;
+
+	public EditCommand(CommandParameters parameters) : base(parameters)
+	{
+		_key = parameters.GetRequiredString(Param.Key);
+	}
 
 	public override void Invoke()
 	{
-		RedisKey key = _key;
+		var type = Database.KeyType(_key);
 
-		var type = Database.KeyType(key);
-		if (type != RedisType.String && type != RedisType.None)
-			throw new InvalidOperationException($"Expected 'String'. The actual key is '{type}'.");
-
-		var text = (string?)Database.StringGet(key);
 		EditTextArgs args = new()
 		{
-			Text = text,
-			Title = _key,
-			Extension = GetFileExtension(_key),
-			EditorSaving = (s, e) =>
+			Title = $"{type} {_key}",
+			EditorOpened = (s, e) =>
 			{
-				var text = ((IEditor)s!).GetText();
-				Database.StringSet(_key, text);
+				var editor = (IEditor)s!;
+				editor.Saving += (s, e) => EditorSaving(editor, type);
 			}
 		};
+
+		switch (type)
+		{
+			case RedisType.None:
+				{
+					args.Text = string.Empty;
+					args.Extension = GetFileExtension(_key.ToString());
+				}
+				break;
+			case RedisType.String:
+				{
+					args.Text = About.StringToText(Database, _key);
+					args.Extension = GetFileExtension(_key.ToString());
+				}
+				break;
+			case RedisType.Hash:
+				{
+					args.Text = About.HashToText(Database, _key);
+				}
+				break;
+			case RedisType.List:
+				{
+					args.Text = About.ListToText(Database, _key);
+				}
+				break;
+			case RedisType.Set:
+				{
+					args.Text = About.SetToText(Database, _key);
+				}
+				break;
+			default:
+				{
+					throw new ModuleException($"Not supported Redis type: {type}.");
+				}
+		}
+
 		Far.Api.AnyEditor.EditTextAsync(args);
+	}
+
+	void EditorSaving(IEditor editor, RedisType type)
+	{
+		switch (type)
+		{
+			case RedisType.None:
+			case RedisType.String:
+				{
+					var text = editor.GetText();
+
+					Database.KeyDelete(_key);
+					Database.StringSet(_key, text);
+				}
+				break;
+			case RedisType.Hash:
+				{
+					var items = About.TextToHash(editor.Strings);
+
+					Database.KeyDelete(_key);
+					Database.HashSet(_key, items);
+				}
+				break;
+			case RedisType.List:
+				{
+					var items = editor.Strings.ToArray().ToRedisValueArray();
+
+					Database.KeyDelete(_key);
+					Database.ListRightPush(_key, items);
+				}
+				break;
+			case RedisType.Set:
+				{
+					var items = editor.Strings.ToArray().ToRedisValueArray();
+
+					Database.KeyDelete(_key);
+					Database.SetAdd(_key, items);
+				}
+				break;
+		}
 	}
 
 	public static string? GetFileExtension(string key)

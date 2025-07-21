@@ -1,0 +1,6 @@
+﻿script=ScriptPS;
+method=Message;
+unload=true
+;;
+name=John Doe;
+age=42

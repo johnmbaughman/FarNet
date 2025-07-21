@@ -62,7 +62,6 @@ public partial class Panel
 			return null;
 
 		// export file
-		Log.Source.TraceInformation("ExportFile");
 		var args = new GetContentEventArgs(mode, file, fileName);
 		panel.UIGetContent(args);
 		if (args.Result != JobResult.Done)
@@ -370,8 +369,6 @@ public partial class Panel
 	/// </remarks>
 	public virtual void UIEditFile(FarFile file)
 	{
-		ArgumentNullException.ThrowIfNull(file);
-
 		// target file path
 		// _201223_vc Avoid Far.Api.TempName(). I think it reuses names if files do not exist. But file history may exist unexpectedly.
 		var temp = Kit.TempFileName(null);
@@ -424,7 +421,6 @@ public partial class Panel
 				editorTemp.Saving += delegate
 				{
 					var xImportTextArgs = new SetTextEventArgs(ExplorerModes.Edit, file, editorTemp.GetText());
-					Log.Source.TraceInformation("ImportText");
 					try
 					{
 						timeError = DateTime.MinValue;
@@ -452,7 +448,6 @@ public partial class Panel
 						return;
 
 					var xImportFileArgs = new SetFileEventArgs(ExplorerModes.Edit, file, temp);
-					Log.Source.TraceInformation("ImportFile");
 					try
 					{
 						UISetFile(xImportFileArgs);
@@ -505,8 +500,6 @@ public partial class Panel
 	/// </remarks>
 	public virtual void UIViewFile(FarFile file)
 	{
-		ArgumentNullException.ThrowIfNull(file);
-
 		// target
 		var temp = Far.Api.TempName();
 
@@ -549,14 +542,12 @@ public partial class Panel
 	/// <param name="file">The file to be opened.</param>
 	public virtual void UIOpenFile(FarFile file)
 	{
-		ArgumentNullException.ThrowIfNull(file);
-
 		if (!Explorer.CanOpenFile)
 			return;
 
 		var args = new OpenFileEventArgs(file);
 		var explorer = UIOpenFile(args);
-		explorer?.OpenPanelChild(this);
+		explorer?.CreatePanel().OpenChild(this);
 	}
 
 	/// <summary>
@@ -683,9 +674,7 @@ public partial class Panel
 	{
 		switch (key.VirtualKeyCode)
 		{
-			case KeyCode.Enter:
-
-				if (key.Is())
+			case KeyCode.Enter when key.Is():
 				{
 					if (RealNames)
 						break;
@@ -697,12 +686,7 @@ public partial class Panel
 					UIOpenFile(file);
 					return true;
 				}
-
-				break;
-
-			case KeyCode.F3:
-
-				if (key.Is())
+			case KeyCode.F3 when key.Is():
 				{
 					if (RealNames)
 						break;
@@ -714,12 +698,7 @@ public partial class Panel
 					UIViewFile(file);
 					return true;
 				}
-
-				break;
-
-			case KeyCode.F4:
-
-				if (key.Is())
+			case KeyCode.F4 when key.Is():
 				{
 					if (RealNames)
 						break;
@@ -731,12 +710,7 @@ public partial class Panel
 					UIEditFile(file);
 					return true;
 				}
-
-				break;
-
-			case KeyCode.F5:
-
-				if (key.Is())
+			case KeyCode.F5 when key.Is():
 				{
 					if (NeedDefaultCopy())
 						return false;
@@ -744,19 +718,13 @@ public partial class Panel
 					UICopyMove(false);
 					return true;
 				}
-
-				if (key.IsShift()) //???? if (RealNames) ?
+			case KeyCode.F5 when key.IsShift():
 				{
 					//! return true even if the file is dots
 					UIClone();
 					return true;
 				}
-
-				break;
-
-			case KeyCode.F6:
-
-				if (key.Is())
+			case KeyCode.F6 when key.Is():
 				{
 					if (NeedDefaultCopy())
 						return false;
@@ -764,19 +732,13 @@ public partial class Panel
 					UICopyMove(true);
 					return true;
 				}
-
-				if (key.IsShift()) //???? if (RealNames) ?
+			case KeyCode.F6 when key.IsShift():
 				{
 					//! return true even if the file is dots
 					UIRename();
 					return true;
 				}
-
-				break;
-
-			case KeyCode.F7:
-
-				if (key.Is())
+			case KeyCode.F7 when key.Is():
 				{
 					if (RealNames && RealNamesMakeDirectory)
 						break;
@@ -784,29 +746,25 @@ public partial class Panel
 					UICreate();
 					return true;
 				}
-
-				break;
-
 			case KeyCode.Delete:
-
-				if (Far.Api.CommandLine.Length > 0)
-					break;
-
-				goto case KeyCode.F8;
-
-			case KeyCode.F8:
-
-				if (key.Is() || key.IsShift())
 				{
-					if (RealNames && RealNamesDeleteFiles)
+					if (Far.Api.CommandLine.Length > 0)
 						break;
 
-					UIDelete(key.IsShift());
-					return true;
+					goto case KeyCode.F8;
 				}
+			case KeyCode.F8:
+				{
+					if (key.Is() || key.IsShift())
+					{
+						if (RealNames && RealNamesDeleteFiles)
+							break;
 
-				break;
-
+						UIDelete(key.IsShift());
+						return true;
+					}
+					break;
+				}
 			//! index -1 ~ no files, e.g. page after the last
 			case KeyCode.PageDown when key.Is() && CurrentIndex >= 0:
 				{
@@ -824,7 +782,6 @@ public partial class Panel
 					}
 				}
 				break;
-
 			//! index -1 ~ no files, e.g. page after the last
 			case KeyCode.PageUp when key.Is() && PageLimit > 0 && CurrentIndex <= 0:
 				{
@@ -838,7 +795,6 @@ public partial class Panel
 					return true;
 				}
 		}
-
 		return false;
 	}
 

@@ -17,21 +17,12 @@ task build meta, {
 	exec { dotnet build -c $Configuration /p:FarHome=$FarHome }
 }
 
-task publish {
-	$null = mkdir $ModuleRoot -Force
-	Copy-Item -Destination $ModuleRoot @(
-		"bin\$Configuration\net8.0\$ModuleName.dll"
-		"bin\$Configuration\net8.0\$ModuleName.pdb"
-	)
-}
-
 task clean {
 	remove z, bin, obj, README.htm, FarNet.$ModuleName.*.nupkg
 }
 
 task version {
-	($script:Version = switch -regex -file History.txt {'^= (\d+\.\d+\.\d+) =$' {$matches[1]; break}})
-	assert $script:Version
+	($Script:Version = Get-BuildVersion History.txt '^= (\d+\.\d+\.\d+) =$')
 }
 
 task meta -Inputs .build.ps1, History.txt -Outputs Directory.Build.props version, {
@@ -54,7 +45,7 @@ task markdown {
 	exec { HtmlToFarHelp "from=README.htm" "to=$ModuleRoot\Vessel.hlf" }
 
 	# HTM
-	assert (Test-Path $env:MarkdownCss)
+	requires -Path $env:MarkdownCss
 	exec {
 		pandoc.exe @(
 			'README.md'

@@ -7,11 +7,19 @@ Far Manager Redis helpers based on FarNet.Redis
 - [About](#about)
 - [Install](#install)
 - [Commands](#commands)
+    - [rk:edit](#rkedit)
+    - [rk:hash](#rkhash)
+    - [rk:json](#rkjson)
+    - [rk:keys](#rkkeys)
+    - [rk:list](#rklist)
+    - [rk:set](#rkset)
+    - [rk:tree](#rktree)
+- [Panels](#panels)
     - [Keys panel](#keys-panel)
     - [Hash panel](#hash-panel)
     - [List panel](#list-panel)
     - [Set panel](#set-panel)
-    - [Edit string](#edit-string)
+- [Editing as text](#editing-as-text)
 - [Menu](#menu)
 - [Settings](#settings)
 
@@ -48,85 +56,246 @@ How to install and update FarNet and modules\
 
 RedisKit commands start with `rk:`. Commands are invoked in the command line or
 using F11 / FarNet / Invoke or defined in the user menu and file associations.
-Command parameters are key=value pairs using the connection string format
+Command parameters are key=value pairs separated by semicolons, using the
+connection string format
 
 ```
-rk:command key=value; ...
+rk:command [key=value] [; key=value] ...
+rk:@ <command file>
 ```
 
 **Common parameters**
 
-- `redis=<string>`
+- `Redis={string}`
 
-    Specifies Redis configuration string or name from [Settings](#settings).
+    Specifies Redis configuration string or its name from [Settings](#settings).
+    See <https://stackexchange.github.io/StackExchange.Redis/Configuration>
 
-**Commands**
+- `DB={int}`
 
-- `rk:keys`
+    Specifies the database index. The default -1 implies the default database
+    if it is specified by Redis configuration, otherwise it is 0.
 
-    Opens the [Keys panel](#keys-panel) with the key pattern.
+**All commands**
 
-- `rk:tree`
+- [rk:edit](#rkedit)
+- [rk:hash](#rkhash)
+- [rk:keys](#rkkeys)
+- [rk:list](#rklist)
+- [rk:set](#rkset)
+- [rk:tree](#rktree)
 
-    Opens the [Keys panel](#keys-panel) with inferred folders.
+*********************************************************************
+## rk:edit
 
-- `rk:hash`
+[Contents]
 
-    Opens the [Hash panel](#hash-panel).
+This command opens the key value editor. Saving in the editor commits to Redis.
+Editors are not modal, you may have several keys edited at the same time.
+See [Editing as text](#editing-as-text) about the rules.
 
-- `rk:list`
+**Parameters**
 
-    Opens the [List panel](#list-panel).
+- `Key={string}` (required)
 
-- `rk:set`
+    Specifies the existing key or a new String key.
 
-    Opens the [Set panel](#set-panel).
+*********************************************************************
+## rk:hash
 
-- `rk:edit`
+[Contents]
 
-    Opens the string editor, see [Edit string](#edit-string).
+This command opens [Hash panel](#hash-panel).
+
+**Parameters**
+
+- `Key={string}` (required)
+
+    Specifies the hash key. If the key does not exist then a new hash will be
+    created. If the key type does not match then the command throws an error.
+
+- `Eol={bool}` (optional)
+
+    Tells to show the EOL column with field end of live times.
+
+*********************************************************************
+## rk:json
+
+[Contents]
+
+This command opens the editor of keys exported as JSON. Saving in the editor
+imports JSON back to Redis. Editors are not modal, you may have several keys
+edited at the same time.
+
+**Parameters**
+
+- `Mask={string}` (required)
+
+    Specifies the search pattern or wildcard or key.
+
+    (1) If the mask contains `[` or `]` then it is used as Redis pattern.
+    See: <https://redis.io/docs/latest/commands/keys>
+
+    (2) If the mask contains `*` or `?` then it is used as wildcard with
+    special symbols `*` and `?`.
+
+    (3) Otherwise the mask is used as the key.
+
+Unlike editing as text, JSON supports end of life values, blobs as Base64
+strings, and complex type strings with new line characters.
+
+**JSON schema**
+
+```
+{
+  "{key}": {
+    "EOL": "{universal-date-time}",
+    "{type}": {value}
+  },
+  "{key}": ...
+}
+```
+
+- `{key}` - Redis keys
+- `{type}` - `Text`, `Blob`, `List`, `Set`, `Hash`
+- `"EOL"` - present or not depending on persistence
+- `{value}`
+    - `Text` - usual string
+    - `Blob` - Base64 string
+    - `List`, `Set`, `Hash` - see below
+
+**List and Set {value}**
+
+List and Set values are arrays of literal strings and blobs. Literal strings
+are usual JSON strings. Blobs are represented as arrays with one Base64 string.
+
+```
+{
+  "my-list": {
+    "List": [
+      "hello",
+      ["AIA="]
+    ]
+  }
+}
+```
+
+**Hash {value}**
+
+Hash values are objects where properties are hash field names and values are
+field values, persistent strings and blobs and expiring strings and blobs.
+
+```
+{
+  "my-hash": {
+    "Hash": {
+      "persistent-text": "42",
+      "persistent-blob": ["AIA="],
+      "expiring-text": {
+        "EOL": "2025-02-02",
+        "Text": "42"
+      },
+      "expiring-blob": {
+        "EOL": "2025-02-02",
+        "Blob": "AIA="
+      }
+    }
+  }
+}
+```
+
+*********************************************************************
+## rk:keys
+
+[Contents]
+
+This command opens [Keys panel](#keys-panel) with the key pattern.
+
+**Parameters**
+
+- `Mask={string}` (optional)
+
+    Specifies the search pattern or wildcard or prefix.
+
+    (1) If the mask contains `[` or `]` then it is used as Redis pattern.
+    See: <https://redis.io/docs/latest/commands/keys>
+
+    (2) If the mask contains `*` or `?` then it is used as wildcard with
+    special symbols `*` and `?`.
+
+    (3) Otherwise the mask is used as prefix. Keys are shown without the
+    prefix. But panel operations work with actual keys with the prefix.
+
+*********************************************************************
+## rk:list
+
+[Contents]
+
+This command opens [List panel](#list-panel).
+
+**Parameters**
+
+- `Key={string}` (required)
+
+    Specifies the list key. If the key does not exist then a new list will be
+    created. If the key type does not match then the command throws an error.
+
+*********************************************************************
+## rk:set
+
+[Contents]
+
+This command opens [Set panel](#set-panel).
+
+**Parameters**
+
+- `Key={string}` (required)
+
+    Specifies the set key. If the key does not exist then a new set will be
+    created. If the key type does not match then the command throws an error.
+
+*********************************************************************
+## rk:tree
+
+[Contents]
+
+This command opens [Keys panel](#keys-panel) with inferred folders.
+
+**Parameters**
+
+- `Root={string}` (optional)
+
+    Specifies the root key prefix for `rk:tree`.\
+    The trailing separator (colon) is optional.
+
+- `Colon={string}` (optional)
+
+    Specifies the folder separator for `rk:tree`.\
+    The default is traditional Redis colon (:).
+
+*********************************************************************
+## Panels
+
+[Contents]
+
+RedisKit provides several panels for browsing and operating
+
+- [Keys panel](#keys-panel)
+- [Hash panel](#hash-panel)
+- [List panel](#list-panel)
+- [Set panel](#set-panel)
 
 *********************************************************************
 ## Keys panel
 
 [Contents]
 
-This panel shows key folders, keys, value types and end-of-life dates.
+This panel shows keys, folders (tree mode), value types and end-of-life dates.
 Type marks: `*` String, `H` Hash, `L` List, `S` Set.
 
-The panel is opened by
+It is opened by [rk:keys](#rkkeys) and [rk:tree](#rktree).
 
-```
-rk:keys mask=<string>
-rk:tree root=<string>; colon=<string>
-```
-
-Parameters
-
-- `mask=<string>` (optional)
-
-    Specifies the search pattern or wildcard or fixed prefix for `rk:keys`.
-
-    (1) If the mask contains `[` or `]` then it is treated as Redis pattern.
-    See: <https://redis.io/docs/latest/commands/keys>
-
-    (2) If the mask contains `*` or `?` then it is treated as wildcard with
-    special symbols `*` and `?` and other characters literal.
-
-    (3) Otherwise the mask is used as the fixed literal prefix. Keys are shown
-    without this prefix but all operations work on actual keys with the prefix.
-
-- `root=<string>` (optional)
-
-    Specifies the root key prefix for `rk:tree`.\
-    The trailing separator (colon) is optional.
-
-- `colon=<string>` (optional)
-
-    Specifies the folder separator for `rk:tree`.\
-    The default is traditional Redis colon (:).
-
-Keys and actions
+**Keys and actions**
 
 - `Enter`
 
@@ -137,7 +306,9 @@ Keys and actions
 
 - `F4`
 
-    Opens the cursor string value editor.
+    Opens the cursor value editor. Saving in the editor commits to Redis.
+    Editors are not modal, you may have several keys edited at the same
+    time. See [Editing as text](#editing-as-text) about the rules.
 
 - `ShiftF5`
 
@@ -168,21 +339,11 @@ Keys and actions
 
 [Contents]
 
-This panel shows hash entries, fields and values. It is opened from the keys
-panel or by this command:
+This panel shows hash entries, fields and values.
 
-```
-rk:hash key=<string>
-```
+It is opened from the keys panel or by [rk:hash](#rkhash).
 
-Parameters
-
-- `key=<string>` (required)
-
-    Specifies the hash key. If the key does not exist, a new hash will be
-    created. If the key type does not match, it's an error.
-
-Keys and actions
+**Keys and actions**
 
 - `F4`
 
@@ -209,21 +370,11 @@ Keys and actions
 
 [Contents]
 
-This panel shows list items. It is opened from the keys panel or by this
-command:
+This panel shows list items.
 
-```
-rk:list key=<string>
-```
+It is opened from the keys panel or by [rk:list](#rklist).
 
-Parameters
-
-- `key=<string>` (required)
-
-    Specifies the list key. If the key does not exist, a new list will be
-    created. If the key type does not match, it's an error.
-
-Keys and actions
+**Keys and actions**
 
 - `F4`
 
@@ -250,21 +401,11 @@ Keys and actions
 
 [Contents]
 
-This panel shows set members. It is opened from the keys panel or by this
-command:
+This panel shows set members.
 
-```
-rk:set key=<string>
-```
+It is opened from the keys panel or by [rk:set](#rkset)
 
-Parameters
-
-- `key=<string>` (required)
-
-    Specifies the set key. If the key does not exist, a new set will be
-    created. If the key type does not match, it's an error.
-
-Keys and actions
+**Keys and actions**
 
 - `F4`
 
@@ -287,23 +428,38 @@ Keys and actions
     Deletes the selected members.
 
 *********************************************************************
-## Edit string
+## Editing as text
 
 [Contents]
 
-This command opens the string editor
+Editing Redis values as text is used by `rk:edit` and by file content
+operations in panels (`F4`, `F3`, `CtrlQ`).
 
-```
-rk:edit key=<string>
-```
+- String
 
-Parameters
+    Redis String can be edited as text if its value looks like UTF-8.
 
-- `key=<string>` (required)
+- List
 
-    Specifies the existing or new string key.
+    Redis List can be edited as text if its items look like UTF-8 and do not
+    contain new line characters. Editor lines, including empty, represent
+    items.
 
-The editor is usually not modal. Saving commits the string to Redis.
+- Set
+
+    Redis Set can be edited as text if its items look like UTF-8 and do not
+    contain new line characters. Editor lines, including empty, represent
+    items.
+
+- Hash
+
+    Redis Hash can be edited as text if its fields and values look like UTF-8
+    and do not contain new line characters. The Hash editor uses line triplets
+    (field, value, empty line) for representing hash entries.
+
+See also [rk:json](#rkjson) for the alternative way. Unlike editing as text,
+JSON supports end of life values, blobs as Base64 strings, and complex type
+strings with new line characters.
 
 *********************************************************************
 ## Menu
@@ -339,8 +495,9 @@ Example:
 
 ```
   <Configurations>
-    <Configuration Name="Main">%FARNET_REDIS_CONFIGURATION%</Configuration>
-    <Configuration Name="Local">127.0.0.1:3278</Configuration>
+    <Configuration Name="main">%FARNET_REDIS_CONFIGURATION%</Configuration>
+    <Configuration Name="db0">127.0.0.1:3278</Configuration>
+    <Configuration Name="db1">127.0.0.1:3278,defaultDatabase=1</Configuration>
   </Configurations>
 ```
 
@@ -352,7 +509,7 @@ The name must exist in `Settings/Configurations`.
 Example:
 
 ```
-  <Configuration>Local</Configuration>
+  <Configuration>main</Configuration>
 ```
 
 *********************************************************************

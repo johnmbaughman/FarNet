@@ -1,9 +1,6 @@
 ﻿using FarNet;
-using GitKit.Extras;
+using GitKit.About;
 using LibGit2Sharp;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace GitKit.Panels;
 
@@ -11,7 +8,7 @@ class BranchesExplorer : BaseExplorer
 {
 	public static Guid MyTypeId = new("75a5d4a6-85b7-4bab-974c-f3a3eb21c992");
 
-	public BranchesExplorer(Repository repository) : base(repository, MyTypeId)
+	public BranchesExplorer(string gitDir) : base(gitDir, MyTypeId)
 	{
 		CanCloneFile = true;
 		CanCreateFile = true;
@@ -22,11 +19,6 @@ class BranchesExplorer : BaseExplorer
 	public override Panel CreatePanel()
 	{
 		return new BranchesPanel(this);
-	}
-
-	public override void EnterPanel(Panel panel)
-	{
-		panel.PostName(Repository.Head?.FriendlyName);
 	}
 
 	static char GetTipsMark(Commit tip1, Commit tip2)
@@ -53,50 +45,49 @@ class BranchesExplorer : BaseExplorer
 
 	public override IEnumerable<FarFile> GetFiles(GetFilesEventArgs args)
 	{
-		if (Repository.Info.IsHeadDetached)
+		using var repo = new Repository(GitDir);
+
+		// init panel
+		if (args.Panel is { } panel && panel.Title is null)
 		{
-			var branch = Repository.Head;
-			yield return new SetFile
-			{
-				Name = branch.FriendlyName,
-				Description = branch.Tip.MessageShort,
-				IsDirectory = true,
-				Data = branch,
-			};
+			panel.PostName(repo.Head?.FriendlyName);
+			panel.Title = $"Branches {repo.Info.WorkingDirectory}";
 		}
 
-		var branches = Repository.Branches
+		if (repo.Info.IsHeadDetached)
+		{
+			if (repo.Head is { } branch)
+				yield return new BranchFile(branch.FriendlyName, branch.Tip.MessageShort);
+		}
+
+		var branches = repo.Branches
 			.OrderBy(x => x.IsRemote)
 			.ThenBy(x => x.FriendlyName);
 
 		foreach (var branch in branches)
 		{
-			yield return new SetFile
-			{
-				Name = branch.FriendlyName,
-				Description = branch.Tip.MessageShort,
-				Owner = GetBranchMarks(branch),
-				IsDirectory = true,
-				Data = branch,
-			};
+			yield return new BranchFile(branch.FriendlyName, branch.Tip.MessageShort, owner: GetBranchMarks(branch));
 		}
 	}
 
 	public override Explorer? ExploreDirectory(ExploreDirectoryEventArgs args)
 	{
-		var branch = (Branch)args.File.Data!;
-		return new CommitsExplorer(Repository, branch);
+		var branchName = args.File.Name;
+		return new CommitsExplorer(GitDir, branchName, null);
 	}
 
 	void CloneBranch(ExplorerEventArgs args, bool checkout)
 	{
-		var (branch, newName) = ((Branch, string))args.Data!;
+		using var repo = new Repository(GitDir);
+
+		var (branchName, newName) = ((string, string))args.Data!;
+		var branch = repo.MyBranch(branchName);
 		try
 		{
-			var newBranch = Repository.CreateBranch(newName, branch.Tip);
+			var newBranch = repo.CreateBranch(newName, branch.Tip);
 
-			if (checkout && !Repository.Info.IsBare)
-				LibGit2Sharp.Commands.Checkout(Repository, newBranch);
+			if (checkout && !repo.Info.IsBare)
+				LibGit2Sharp.Commands.Checkout(repo, newBranch);
 
 			args.PostName = newName;
 		}
@@ -126,20 +117,30 @@ class BranchesExplorer : BaseExplorer
 
 	void DeleteRemoteBranch(Branch branch)
 	{
+		using var repo = new Repository(GitDir);
+
 		var op = new PushOptions
 		{
 			CredentialsProvider = Host.GetCredentialsHandler()
 		};
 
-		var remote = Repository.Network.Remotes[branch.RemoteName];
-		Repository.Network.Push(remote, $":{branch.UpstreamBranchCanonicalName}", op);
+		var remote = repo.Network.Remotes[branch.RemoteName];
+		repo.Network.Push(remote, $":{branch.UpstreamBranchCanonicalName}", op);
 	}
 
 	public override void DeleteFiles(DeleteFilesEventArgs args)
 	{
+		using var repo = new Repository(GitDir);
+
 		foreach (var file in args.Files)
 		{
-			var branch = (Branch)file.Data!;
+			var branchName = file.Name;
+			var branch = repo.MyBranch(branchName);
+			if (branch.IsCurrentRepositoryHead)
+			{
+				CannotDelete(args, file, $"Cannot delete head branch '{branch.FriendlyName}'.");
+				continue;
+			}
 
 			if (!args.Force)
 			{
@@ -149,10 +150,9 @@ class BranchesExplorer : BaseExplorer
 					continue;
 				}
 
-				var another = Lib.GetBranchesContainingCommit(Repository, branch.Tip).FirstOrDefault(another => another != branch);
-				if (another is null)
+				if (branch.TrackedBranch is not { } tracked || tracked.Tip is not { } tip2 || tip2.Author.When < branch.Tip.Author.When)
 				{
-					CannotDelete(args, file, $"Use [ShiftDel] to delete branch '{branch.FriendlyName}' with unique commits.");
+					CannotDelete(args, file, $"Use [ShiftDel] to delete branch '{branch.FriendlyName}'.");
 					continue;
 				}
 			}
@@ -165,7 +165,7 @@ class BranchesExplorer : BaseExplorer
 				}
 				else
 				{
-					Repository.Branches.Remove(branch);
+					repo.Branches.Remove(branch);
 				}
 			}
 			catch (Exception ex)
@@ -177,9 +177,11 @@ class BranchesExplorer : BaseExplorer
 
 	public override void RenameFile(RenameFileEventArgs args)
 	{
-		var branch = (Branch)args.File.Data!;
+		using var repo = new Repository(GitDir);
+
+		var branchName = args.File.Name;
 		var newName = (string)args.Data!;
-		Repository.Branches.Rename(branch, newName);
+		repo.Branches.Rename(branchName, newName);
 		args.PostName = newName;
 	}
 }

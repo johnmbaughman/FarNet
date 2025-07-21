@@ -1,12 +1,8 @@
 
-// PowerShellFar module for Far Manager
-// Copyright (c) Roman Kuzmin
-
-using System;
+using FarNet;
 using System.Collections;
 using System.Data;
 using System.Management.Automation;
-using FarNet;
 
 namespace PowerShellFar;
 
@@ -16,8 +12,9 @@ namespace PowerShellFar;
 public abstract class ListPanel : AnyPanel
 {
 	static string? _lastCurrentName;
+	ListExplorer MyExplorer => (ListExplorer)Explorer;
 
-	internal ListPanel(Explorer explorer) : base(explorer)
+	internal ListPanel(ListExplorer explorer) : base(explorer)
 	{
 		PostName(_lastCurrentName);
 
@@ -45,8 +42,6 @@ public abstract class ListPanel : AnyPanel
 	/// <param name="file">The file to process.</param>
 	public override void OpenFile(FarFile file)
 	{
-		ArgumentNullException.ThrowIfNull(file);
-
 		// e.g. visible mode: sender is MemberDefinition
 		if (file.Data is not PSPropertyInfo pi)
 			return;
@@ -166,7 +161,7 @@ public abstract class ListPanel : AnyPanel
 
 	internal override void UIApply()
 	{
-		A.InvokePipelineForEach(new PSObject[] { Target });
+		A.InvokePipelineForEach([Target]);
 	}
 
 	internal override void HelpMenuInitItems(HelpMenuItems items, PanelMenuEventArgs e)
@@ -180,53 +175,51 @@ public abstract class ListPanel : AnyPanel
 		base.HelpMenuInitItems(items, e);
 	}
 
-	/// <summary>
-	/// It deletes property values = assigns nulls.
-	/// </summary>
-	internal void UISetNulls()
+	void SetNulls(IEnumerable<FarFile> files)
 	{
-		foreach (FarFile file in GetSelectedFiles())
+		try
 		{
-			if (file.Data is not PSPropertyInfo pi)
-				continue;
-
-			try
+			foreach (var file in files)
 			{
-				//_110326_150007 Setting null fails for DataRow with value types, use DBNull
-				if (Target.BaseObject is DataRow)
-					pi.Value = DBNull.Value;
-				else
-					SetUserValue(pi, null);
+				if (file.Data is not PSPropertyInfo pi)
+					continue;
 
-				UpdateRedraw(true);
+				try
+				{
+					//_110326_150007 Setting null fails for DataRow with value types, use DBNull
+					if (Target.BaseObject is DataRow)
+						pi.Value = DBNull.Value;
+					else
+						SetUserValue(pi, null);
+				}
+				catch (Exception ex)
+				{
+					Log.TraceException(ex);
+					throw new ModuleException($"Cannot null '{file.Name}': {ex.Message}");
+				}
 			}
-			catch (RuntimeException ex)
-			{
-				A.Message(ex.Message);
-			}
+		}
+		finally
+		{
+			UpdateRedraw(true);
 		}
 	}
 
 	/// <inheritdoc/>
-	public override bool UIKeyPressed(KeyInfo key)
+	public override void UIDeleteFiles(DeleteFilesEventArgs args)
 	{
-		ArgumentNullException.ThrowIfNull(key);
-
-		switch (key.VirtualKeyCode)
+		if (args.Force)
 		{
-			case KeyCode.Delete:
-			case KeyCode.F8:
-
-				if (key.IsShift())
-				{
-					UISetNulls();
-					return true;
-				}
-
-				break;
+			SetNulls(args.Files);
+			args.Result = JobResult.Ignore;
 		}
-
-		// base
-		return base.UIKeyPressed(key);
+		else if (MyExplorer.SkipDeleteFiles)
+		{
+			args.Result = JobResult.Ignore;
+		}
+		else
+		{
+			base.UIDeleteFiles(args);
+		}
 	}
 }

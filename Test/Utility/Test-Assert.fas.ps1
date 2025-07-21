@@ -93,7 +93,7 @@ job {
 job {
 	Assert-Far -Panels -Native
 	Assert-Far -Passive -Native
-	& "$env:PSF\Samples\Tests\Test-Panel.far.ps1"
+	& "$env:FarNetCode\Samples\Tests\Test-Panel.far.ps1"
 }
 job {
 	Assert-Far -Panels -Plugin
@@ -103,7 +103,7 @@ keys Tab
 job {
 	Assert-Far -Panels -Native
 	Assert-Far -Passive -Plugin
-	& "$env:PSF\Samples\Tests\Test-Panel.far.ps1"
+	& "$env:FarNetCode\Samples\Tests\Test-Panel.far.ps1"
 }
 job {
 	Assert-Far -Panels -Plugin
@@ -133,7 +133,7 @@ job {
 		AsGetFiles = {
 			New-FarFile -Name Name1 -Description Description1 -Owner Owner1
 		}
-	}).OpenPanel()
+	}).CreatePanel().Open()
 }
 job {
 	# check all

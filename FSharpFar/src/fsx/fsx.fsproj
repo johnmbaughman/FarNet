@@ -3,11 +3,9 @@
     <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
     <FarHome Condition="'$(FarHome)' == ''">C:\Bin\Far\x64</FarHome>
     <MyOutDir>$(FarHome)\FarNet\Modules\FSharpFar</MyOutDir>
-  </PropertyGroup>
-  <PropertyGroup>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <TargetFramework>net9.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
-    <WarningLevel>5</WarningLevel>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <OutputType>Exe</OutputType>
   </PropertyGroup>
@@ -24,12 +22,12 @@
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="FSharp.Core" Version="8.0.200" />
-    <PackageReference Include="FSharp.Compiler.Service" Version="43.8.200" />
+    <PackageReference Include="FSharp.Core" Version="9.0.101" />
+    <PackageReference Include="FSharp.Compiler.Service" Version="43.9.101" />
   </ItemGroup>
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
     <ItemGroup>
-      <MyItem1 Include="$(OutDir)\fsx.*" Exclude="*.deps.json" />
+      <MyItem1 Include="$(OutDir)\fsx.*" />
     </ItemGroup>
     <Copy DestinationFolder="$(MyOutDir)" SourceFiles="@(MyItem1)" SkipUnchangedFiles="true" />
   </Target>

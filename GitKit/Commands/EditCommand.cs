@@ -1,32 +1,28 @@
 ﻿using FarNet;
-using GitKit.Extras;
+using GitKit.About;
 using LibGit2Sharp;
-using System.Data.Common;
 
 namespace GitKit.Commands;
 
-sealed class EditCommand : BaseCommand
+sealed class EditCommand(CommandParameters parameters) : BaseCommand(parameters)
 {
-	readonly string? _path;
+	readonly string? _path = parameters.GetString(Param.Path, ParameterOptions.ExpandVariables);
 
-	public EditCommand(DbConnectionStringBuilder parameters) : base(parameters)
+	static string? InputPath(Repository repo)
 	{
-		_path = parameters.GetString(Parameter.Path, true);
-	}
-
-	string? InputPath()
-	{
-		var path = Far.Api.Input("Git file path", "GitFile", $"Edit in {Repository.Info.WorkingDirectory ?? Repository.Info.Path}");
+		var path = Far.Api.Input("Git file path", "GitFile", $"Edit in {repo.Info.WorkingDirectory ?? repo.Info.Path}");
 		return string.IsNullOrEmpty(path) ? null : path;
 	}
 
 	public override void Invoke()
 	{
-		string? path = _path ?? InputPath();
+		using var repo = new Repository(GitDir);
+
+		string? path = _path ?? InputPath(repo);
 		if (path is null)
 			return;
 
-		path = Lib.ResolveRepositoryItemPath(Repository, path);
+		path = Lib.ResolveRepositoryItemPath(repo, path);
 
 		var editor = Far.Api.CreateEditor();
 		editor.FileName = path;

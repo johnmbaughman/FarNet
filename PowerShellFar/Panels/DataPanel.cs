@@ -1,16 +1,10 @@
 
-// PowerShellFar module for Far Manager
-// Copyright (c) Roman Kuzmin
-
-using System;
+using FarNet;
 using System.Collections;
-using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Globalization;
-using System.IO;
 using System.Management.Automation;
-using FarNet;
 
 namespace PowerShellFar;
 
@@ -218,7 +212,7 @@ public sealed class DataPanel : TablePanel, IDisposable
 	}
 
 	///
-	protected override string DefaultTitle { get { return string.IsNullOrEmpty(Table!.TableName) ? "Data Table" : "Table " + Table.TableName; } }
+	protected override string DefaultTitle => string.IsNullOrEmpty(Table!.TableName) ? "Data Table" : "Table " + Table.TableName;
 
 	/// <summary>
 	/// Fills data table and shows the panel.
@@ -616,8 +610,7 @@ public sealed class DataPanel : TablePanel, IDisposable
 		{
 			// ~ Dynamic SQL generation for the UpdateCommand is not supported against a SelectCommand that does not return any key column information.
 			// _221127_1221: Dik.sqlite -- table with no PK -- open a record
-
-			Log.TraceError(ex.Message);
+			Log.TraceException(ex);
 			Adapter.UpdateCommand = null;
 		}
 	}
@@ -703,7 +696,7 @@ public sealed class DataPanel : TablePanel, IDisposable
 	void OpenFileActor(FarFile file)
 	{
 		var memberPanel = OpenFileMembers(file)!;
-		memberPanel.Explorer.CanDeleteFiles = false;
+		memberPanel.MyExplorer.SkipDeleteFiles = true;
 	}
 
 	void OnSort()

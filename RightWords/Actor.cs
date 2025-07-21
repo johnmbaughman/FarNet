@@ -1,19 +1,19 @@
-﻿
-// FarNet module RightWords
-// Copyright (c) Roman Kuzmin
-
-using System;
-using System.Collections.Generic;
+﻿using FarNet;
 using System.Globalization;
-using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace FarNet.RightWords;
+namespace RightWords;
 
-static class Actor
+static partial class Actor
 {
 	public static readonly List<DictionaryInfo> Dictionaries = [];
+
+	[GeneratedRegex(@"^\p{Ll}{2,}$")]
+	internal static partial Regex MyRegex1();
+
+	[GeneratedRegex(@"^\p{Lu}\p{Ll}+$")]
+	internal static partial Regex MyRegex2();
 
 	static Actor()
 	{
@@ -28,63 +28,51 @@ static class Actor
 				var dic = Path.ChangeExtension(aff, ".dic");
 				if (File.Exists(dic))
 				{
-					var language = new DictionaryInfo() { HunspellAffFile = aff, HunspellDictFile = dic, Language = Path.GetFileName(dir) };
+					var language = new DictionaryInfo { HunspellAffFile = aff, HunspellDictFile = dic, Language = Path.GetFileName(dir) };
 					Dictionaries.Add(language);
 				}
 			}
 		}
 	}
 
-	public static Match MatchCaret(Regex regex, string input, int caret, bool next)
-	{
-		Match match = regex.Match(input);
-		while (match.Success)
-		{
-			if (caret > match.Index + match.Length)
-				match = match.NextMatch();
-			else if (caret < match.Index)
-				return next ? match : null;
-			else
-				break;
-		}
-		return match.Success ? match : null;
-	}
-
 	public static void CorrectWord()
 	{
 		ILine line;
-		IEditor editor;
+		IEditor? editor;
 
 		var kind = Far.Api.Window.Kind;
 		if (kind == WindowKind.Editor)
 		{
 			editor = Far.Api.Editor;
-			line = editor[-1];
+			line = editor![-1];
 		}
 		else
 		{
-			line = Far.Api.Line;
-			if (line == null)
+			line = Far.Api.Line!;
+			if (line is null)
 				return;
 		}
 
+		// the text
+		var text = line.Text2;
+
 		// search for the current word
 		var settings = Settings.Default.GetData();
-		var match = MatchCaret(settings.WordRegex2, line.Text, line.Caret, false);
-		if (match == null)
+		var match = Kit.MatchCaret(settings.WordRegex2, text, line.Caret);
+		if (match.Length == 0)
 			return;
 
-		// the current word
-		var word = MatchToWord(match);
+		// the caret word
+		var word = Kit.CleanWord(text.Slice(match.Index, match.Length), settings.RemoveRegex2);
 
 		// get suggestions with check
-		List<string> words = null;
+		List<string>? words = null;
 		var spell = MultiSpell.Get();
 		if (!spell.Check(word))
 			words = spell.Suggest(word);
 
 		// it is correct or nothing is suggested
-		if (words == null || words.Count == 0)
+		if (words is null || words.Count == 0)
 		{
 			// move caret to the end of word
 			line.Caret = match.Index + match.Length;
@@ -92,8 +80,9 @@ static class Actor
 		}
 
 		// show suggestions
+		var wordString = word.ToString();
 		var cursor = Far.Api.UI.WindowCursor;
-		var menu = new UIWordMenu(words, word, cursor.X, cursor.Y + 1);
+		var menu = new UIWordMenu(words, wordString, cursor.X, cursor.Y + 1);
 
 		// cancel or ignore:
 		if (!menu.Show() || menu.IsIgnore)
@@ -102,38 +91,23 @@ static class Actor
 		// ignore all:
 		if (menu.IsIgnoreAll)
 		{
-			KnownWords.AddIgnoreWord(word);
+			KnownWords.AddIgnoreWord(wordString);
 			return;
 		}
 
 		// add to dictionary:
 		if (menu.IsAddToDictionary)
 		{
-			AddRightWord(word);
+			AddRightWord(wordString);
 			return;
 		}
 
 		// replace the word with the suggestion
-		word = menu.Word;
+		wordString = menu.Word;
 		line.SelectText(match.Index, match.Index + match.Length);
-		line.SelectedText = word;
+		line.SelectedText = wordString;
 		line.UnselectText();
-		line.Caret = match.Index + word.Length;
-	}
-
-	public static bool HasMatch(MatchCollection matches, Match match)
-	{
-		if (matches != null)
-			foreach (Match m in matches)
-				if (match.Index >= m.Index && match.Index + match.Length <= m.Index + m.Length)
-					return true;
-
-		return false;
-	}
-
-	public static MatchCollection GetMatches(Regex regex, string text)
-	{
-		return regex?.Matches(text);
+		line.Caret = match.Index + wordString.Length;
 	}
 
 	public static void CorrectText()
@@ -141,7 +115,7 @@ static class Actor
 		var settings = Settings.Default.GetData();
 
 		// initial editor data
-		var editor = Far.Api.Editor;
+		var editor = Far.Api.Editor!;
 		var caret0 = editor.Caret;
 		int iLine1, iLine2;
 		if (editor.SelectionExists)
@@ -170,19 +144,20 @@ static class Actor
 
 				// the line and its text now
 				var line = editor[iLine];
-				var text = line.Text;
+				var text = line.Text2;
+				var textString = text.ToString();
 
 				// the first word
-				Match match = MatchCaret(settings.WordRegex2, text, line.Caret, true);
-				if (match == null)
+				var match = Kit.MatchCaretOrNext(settings.WordRegex2, textString, line.Caret);
+				if (match is null)
 					goto NextLine;
 
 				// loop through line words (matches) with no changes
-				MatchCollection skip = null;
+				MatchCollection? skip = null;
 				for (; match.Success; match = match.NextMatch())
 				{
 					// the target word
-					var word = MatchToWord(match);
+					var word = Kit.CleanWord(text.Slice(match.Index, match.Length), settings.RemoveRegex2);
 
 					// check cheap skip lists
 					if (KnownWords.Contains(word))
@@ -193,7 +168,7 @@ static class Actor
 						continue;
 
 					// expensive skip pattern
-					if (HasMatch(skip ??= GetMatches(settings.SkipRegex2, text), match))
+					if (Kit.HasMatch(skip ??= Kit.GetMatches(settings.SkipRegex2, textString), match.Index, match.Length))
 						continue;
 
 					// check spelling and get suggestions
@@ -219,8 +194,9 @@ static class Actor
 					editor.Redraw();
 
 					// menu
+					var wordString = word.ToString();
 					var point = editor.ConvertPointEditorToScreen(new Point(column, iLine));
-					var menu = new UIWordMenu(words, word, point.X, point.Y + 1);
+					var menu = new UIWordMenu(words, wordString, point.X, point.Y + 1);
 
 					// cancel:
 					if (!menu.Show())
@@ -233,14 +209,14 @@ static class Actor
 					// ignore all:
 					if (menu.IsIgnoreAll)
 					{
-						KnownWords.AddIgnoreWord(word);
+						KnownWords.AddIgnoreWord(wordString);
 						continue;
 					}
 
 					// add to dictionary:
 					if (menu.IsAddToDictionary)
 					{
-						AddRightWord(word);
+						AddRightWord(wordString);
 						continue;
 					}
 
@@ -297,13 +273,13 @@ static class Actor
 		return Path.Combine(GetUserDictionaryDirectory(create), "RightWords." + name + ".dic");
 	}
 
-	static string[] ShowMenuAddWord(string word)
+	static string[]? ShowMenuAddWord(string word)
 	{
 		string word2;
 
-		if (Regex.IsMatch(word, @"^\p{Ll}{2,}$"))
+		if (MyRegex1().IsMatch(word))
 			word2 = string.Concat(word[..1].ToUpper(CultureInfo.CurrentCulture), word.AsSpan(1));
-		else if (Regex.IsMatch(word, @"^\p{Lu}\p{Ll}+$"))
+		else if (MyRegex2().IsMatch(word))
 			word2 = word.ToLower(CultureInfo.CurrentCulture);
 		else
 			return [word];
@@ -338,14 +314,14 @@ static class Actor
 			menu.Add(name);
 
 		// repeat the menu
-		MultiSpell multiSpell = null;
+		MultiSpell? multiSpell = null;
 		while (menu.Show())
 		{
 			// common:
 			if (menu.Selected == 0)
 			{
-				string[] newWords = ShowMenuAddWord(word);
-				if (newWords == null)
+				var newWords = ShowMenuAddWord(word);
+				if (newWords is null)
 					continue;
 
 				// write/add
@@ -368,7 +344,7 @@ static class Actor
 
 				// stem2 should give results
 				var stem2 = dialog.Stem2.Trim();
-				if (stem2.Length > 0 && spell.WordList[stem2].Length == 0)
+				if (stem2.Length > 0 && spell.WordList![stem2].Length == 0)
 					continue;
 
 				// bump known words version to refresh caches
@@ -377,36 +353,15 @@ static class Actor
 				// append to the language dictionary
 				var path = GetUserDictionaryPath(language, true);
 				var line = stem2.Length == 0 ? stem1 : $"{stem1} {stem2}";
-				File.AppendAllLines(path, new[] { line });
+				File.AppendAllLines(path, [line]);
 
 				// read the updated user words
 				var sb = new StringBuilder();
-				spell.UserList = MultiSpell.ReadUserWords(path, spell.WordList, text => sb.AppendLine(text));
+				spell.UserList = MultiSpell.ReadUserWords(path, spell.WordList!, text => sb.AppendLine(text));
 				if (sb.Length > 0)
 					Far.Api.Message(sb.ToString(), "User words file warnings");
 				return;
 			}
 		}
-	}
-
-	public static string MatchToWord(Match match)
-	{
-		if (match.Groups.Count < 2)
-			return match.Value;
-
-		var word = match.Value;
-
-		for (int i = match.Groups.Count; --i >= 1;)
-		{
-			var group = match.Groups[i];
-			if (!group.Success)
-				continue;
-
-			var index = group.Index - match.Index;
-			if (index + group.Length <= word.Length)
-				word = word.Remove(index, group.Length);
-		}
-
-		return word;
 	}
 }

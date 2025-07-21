@@ -1,8 +1,9 @@
 ﻿using FarNet;
+using GitKit.About;
 using GitKit.Commands;
-using GitKit.Extras;
 using GitKit.Panels;
-using System.Data.Common;
+using LibGit2Sharp;
+using System;
 
 namespace GitKit;
 
@@ -15,24 +16,43 @@ public class Tool : ModuleTool
 		menu.Title = Host.MyName;
 		menu.HelpTopic = GetHelpTopic("menu");
 
-		if (Far.Api.Panel is AnyPanel panel)
+		if (Far.Api.Panel is AbcPanel panel)
 		{
 			panel.AddMenu(menu);
 		}
 		else
 		{
-			menu.Add("Commit log", CommitLog);
+			menu.Add(Const.CopySha, (s, e) => CopySha());
+			menu.Add(Const.BlameFile, (_, _) => BlameFile());
+			menu.Add(Const.CommitLog, (_, _) => CommitLog());
 		}
 
-		menu.Add("Help", (s, e) => Host.Instance.ShowHelpTopic(string.Empty));
+		menu.Add(Const.Help, (s, e) => Host.Instance.ShowHelpTopic(string.Empty));
 
 		menu.Show();
 	}
 
-	void CommitLog(object? sender, MenuEventArgs e)
+	static void CopySha()
 	{
-		var parameters = new DbConnectionStringBuilder { { Parameter.Path, "?" } };
-		using var command = new CommitsCommand(parameters);
-		command.Invoke();
+		try
+		{
+			using var repo = new Repository(Lib.GetGitDir(Far.Api.CurrentDirectory));
+
+			UI.CopySha(Lib.GetExistingTip(repo));
+		}
+		catch (Exception ex)
+		{
+			throw new ModuleException(ex.Message);
+		}
+	}
+
+	static void BlameFile()
+	{
+		new BlameCommand(CommandParameters.Parse("blame")).Invoke();
+	}
+
+	static void CommitLog()
+	{
+		new CommitsCommand(CommandParameters.Parse("commits path=?")).Invoke();
 	}
 }

@@ -1,7 +1,4 @@
 
-// FarNet plugin for Far Manager
-// Copyright (c) Roman Kuzmin
-
 // _110628_192511 Open from a quick view panel issue
 // The `from` == OPEN_VIEWER. But the menu has been created for `window` == WTYPE_PANELS.
 // The `item` is related to the panel handlers. But technically it is strange to call them for not really a panel.
@@ -9,6 +6,7 @@
 #include "stdafx.h"
 #include "Far0.h"
 #include "Far1.h"
+#include "Far2.h"
 #include "Dialog.h"
 #include "Editor.h"
 #include "Panel0.h"
@@ -24,58 +22,6 @@ static PluginMenuItem _Disk;
 static PluginMenuItem _Editor;
 static PluginMenuItem _Panels;
 static PluginMenuItem _Viewer;
-
-// Works::Host::Instance instance.
-ref class Host : Works::Host
-{
-public:
-	virtual void RegisterProxyCommand(IModuleCommand^ info) override
-	{
-		Far0::RegisterProxyCommand(info);
-	}
-	virtual void RegisterProxyDrawer(IModuleDrawer^ info) override
-	{
-		Far0::RegisterProxyDrawer(info);
-	}
-	virtual void RegisterProxyEditor(IModuleEditor^ info) override
-	{
-		Far0::RegisterProxyEditor(info);
-	}
-	virtual void RegisterProxyTool(IModuleTool^ info) override
-	{
-		Far0::RegisterProxyTool(info);
-	}
-	virtual void UnregisterProxyAction(IModuleAction^ action) override
-	{
-		Far0::UnregisterProxyAction(action);
-	}
-	virtual void UnregisterProxyTool(IModuleTool^ tool) override
-	{
-		Far0::UnregisterProxyTool(tool);
-	}
-	virtual void InvalidateProxyCommand() override
-	{
-		Far0::InvalidateProxyCommand();
-	}
-};
-
-// Works::Far2::Api instance.
-ref class Far2 : Works::Far2
-{
-public:
-	virtual FarNet::Works::IPanelWorks^ CreatePanel(Panel^ panel, Explorer^ explorer) override
-	{
-		return gcnew Panel2(panel, explorer);
-	}
-	virtual Task^ WaitSteps() override
-	{
-		return Far0::WaitSteps();
-	}
-	virtual WaitHandle^ PostMacroWait(String^ macro) override
-	{
-		return Far0::PostMacroWait(macro);
-	}
-};
 
 void Far0::FreePluginMenuItem(PluginMenuItem& p)
 {
@@ -97,21 +43,15 @@ void Far0::Start()
 {
 	try
 	{
-		Log::Source->TraceInformation("Start..");
-		auto sw = Stopwatch::StartNew();
-
 		// inject
 		Far::Api = gcnew Far1();
 		Works::Far2::Api = gcnew Far2();
-		Works::Host::Instance = gcnew Host();
 
 		// module folder
 		auto path = Environment::ExpandEnvironmentVariables("%FARHOME%\\FarNet\\Modules");
 
 		// load modules
 		Works::ModuleLoader().LoadModules(path);
-
-		Log::Source->TraceInformation("Started {0}", sw->Elapsed);
 	}
 	catch (Exception^ ex)
 	{
@@ -146,7 +86,7 @@ void Far0::UnregisterProxyAction(IModuleAction^ action)
 		}
 	}
 
-	Works::Host::Actions->Remove(action->Id);
+	Works::Far2::Actions->Remove(action->Id);
 
 	{
 		IModuleCommand^ it = dynamic_cast<IModuleCommand^>(action);
@@ -178,7 +118,7 @@ void Far0::UnregisterProxyAction(IModuleAction^ action)
 
 void Far0::UnregisterProxyTool(IModuleTool^ tool)
 {
-	Works::Host::Actions->Remove(tool->Id);
+	Works::Far2::Actions->Remove(tool->Id);
 
 	InvalidateProxyTool(tool->Options);
 }
@@ -224,7 +164,7 @@ void Far0::InvalidateProxyTool(ModuleToolOptions options)
 
 void Far0::RegisterProxyCommand(IModuleCommand^ info)
 {
-	Works::Host::Actions->Add(info->Id, info);
+	Works::Far2::Actions->Add(info->Id, info);
 
 	_registeredCommand.Add(info);
 	delete _prefixes;
@@ -233,21 +173,21 @@ void Far0::RegisterProxyCommand(IModuleCommand^ info)
 
 void Far0::RegisterProxyDrawer(IModuleDrawer^ info)
 {
-	Works::Host::Actions->Add(info->Id, info);
+	Works::Far2::Actions->Add(info->Id, info);
 
 	_registeredDrawer.Add(info);
 }
 
 void Far0::RegisterProxyEditor(IModuleEditor^ info)
 {
-	Works::Host::Actions->Add(info->Id, info);
+	Works::Far2::Actions->Add(info->Id, info);
 
 	_registeredEditor.Add(info);
 }
 
 void Far0::RegisterProxyTool(IModuleTool^ info)
 {
-	Works::Host::Actions->Add(info->Id, info);
+	Works::Far2::Actions->Add(info->Id, info);
 
 	InvalidateProxyTool(info->Options);
 }
@@ -278,7 +218,7 @@ void Far0::AsGetPluginInfo(PluginInfo* pi)
 	{
 		if (!_toolConfig)
 		{
-			_toolConfig = Works::Host::GetTools(ModuleToolOptions::Config);
+			_toolConfig = Works::Far2::GetTools(ModuleToolOptions::Config);
 
 			_Config.Count = _toolConfig->Length + 1;
 			GUID* guids = new GUID[_Config.Count];
@@ -300,14 +240,14 @@ void Far0::AsGetPluginInfo(PluginInfo* pi)
 	}
 
 	// type
-	switch(windowKind)
+	switch((WINDOWINFO_TYPE)windowKind)
 	{
 	case WTYPE_DIALOG:
 	case WTYPE_VMENU:
 		{
 			if (!_toolDialog)
 			{
-				_toolDialog = Works::Host::GetTools(ModuleToolOptions::Dialog);
+				_toolDialog = Works::Far2::GetTools(ModuleToolOptions::Dialog);
 
 				_Dialog.Count = _toolDialog->Length + 1;
 				GUID* guids = new GUID[_Dialog.Count];
@@ -331,7 +271,7 @@ void Far0::AsGetPluginInfo(PluginInfo* pi)
 		{
 			if (!_toolEditor)
 			{
-				_toolEditor = Works::Host::GetTools(ModuleToolOptions::Editor);
+				_toolEditor = Works::Far2::GetTools(ModuleToolOptions::Editor);
 
 				_Editor.Count = _toolEditor->Length + 1;
 				GUID* guids = new GUID[_Editor.Count];
@@ -355,7 +295,7 @@ void Far0::AsGetPluginInfo(PluginInfo* pi)
 		{
 			if (!_toolViewer)
 			{
-				_toolViewer = Works::Host::GetTools(ModuleToolOptions::Viewer);
+				_toolViewer = Works::Far2::GetTools(ModuleToolOptions::Viewer);
 
 				_Viewer.Count = _toolViewer->Length + 1;
 				GUID* guids = new GUID[_Viewer.Count];
@@ -380,7 +320,7 @@ void Far0::AsGetPluginInfo(PluginInfo* pi)
 		{
 			if (!_toolPanels)
 			{
-				_toolPanels = Works::Host::GetTools(ModuleToolOptions::Panels);
+				_toolPanels = Works::Far2::GetTools(ModuleToolOptions::Panels);
 
 				_Panels.Count = _toolPanels->Length + 1;
 				GUID* guids = new GUID[_Panels.Count];
@@ -403,7 +343,7 @@ void Far0::AsGetPluginInfo(PluginInfo* pi)
 		{
 			if (!_toolDisk)
 			{
-				_toolDisk = Works::Host::GetTools(ModuleToolOptions::Disk);
+				_toolDisk = Works::Far2::GetTools(ModuleToolOptions::Disk);
 				if (_toolDisk->Length > 0)
 				{
 					_Disk.Count = _toolDisk->Length;
@@ -486,7 +426,6 @@ HANDLE Far0::AsOpen(const OpenInfo* info)
 		}
 
 		// normal command
-		Log::Source->TraceInformation("OPEN_FROMMACRO");
 		if (InvokeCommand(command, OPEN_FROMMACRO))
 			return (HANDLE)1;
 		else
@@ -501,7 +440,6 @@ HANDLE Far0::AsOpen(const OpenInfo* info)
 		{
 		case OPEN_COMMANDLINE:
 			{
-				Log::Source->TraceInformation("OPEN_COMMANDLINE");
 				InvokeCommand(((OpenCommandLineInfo*)info->Data)->CommandLine, OPEN_COMMANDLINE);
 
 				if (Works::Test::IsTestCommand)
@@ -511,7 +449,6 @@ HANDLE Far0::AsOpen(const OpenInfo* info)
 		case OPEN_LEFTDISKMENU:
 		case OPEN_RIGHTDISKMENU:
 			{
-				Log::Source->TraceInformation("OPEN_DISKMENU");
 				IModuleTool^ tool = (IModuleTool^)Far::Api->GetModuleAction(FromGUID(*info->Guid));
 				ModuleToolEventArgs e;
 				e.From = ModuleToolOptions::Disk;
@@ -528,8 +465,6 @@ HANDLE Far0::AsOpen(const OpenInfo* info)
 					break;
 				}
 
-				Log::Source->TraceInformation("OPEN_PLUGINSMENU");
-
 				IModuleTool^ tool = (IModuleTool^)Far::Api->GetModuleAction(guid);
 				ModuleToolEventArgs e;
 				e.From = ModuleToolOptions::Panels;
@@ -545,7 +480,6 @@ HANDLE Far0::AsOpen(const OpenInfo* info)
 					break;
 				}
 
-				Log::Source->TraceInformation("OPEN_EDITOR");
 				IModuleTool^ tool = (IModuleTool^)Far::Api->GetModuleAction(guid);
 				ModuleToolEventArgs e;
 				e.From = ModuleToolOptions::Editor;
@@ -565,7 +499,6 @@ HANDLE Far0::AsOpen(const OpenInfo* info)
 				if (Far::Api->Window->Kind == WindowKind::Panels)
 					break;
 
-				Log::Source->TraceInformation("OPEN_VIEWER");
 				IModuleTool^ tool = (IModuleTool^)Far::Api->GetModuleAction(guid);
 				ModuleToolEventArgs e;
 				e.From = ModuleToolOptions::Viewer;
@@ -582,7 +515,6 @@ HANDLE Far0::AsOpen(const OpenInfo* info)
 					break;
 				}
 
-				Log::Source->TraceInformation("OPEN_DIALOG");
 				IModuleTool^ tool = (IModuleTool^)Far::Api->GetModuleAction(guid);
 				ModuleToolEventArgs e;
 				e.From = ModuleToolOptions::Dialog;
@@ -621,7 +553,7 @@ void Far0::OpenConfig() //config//
 	menu->HelpTopic = "config-menu";
 	menu->Title = "Modules configuration";
 
-	auto tools = Works::Host::ListTools();
+	auto tools = Works::Far2::ListTools();
 
 	String^ format = "{0,-10} : {1,2}";
 	menu->Add(String::Format(format, Res::ModuleCommands, _registeredCommand.Count));
@@ -789,8 +721,7 @@ void Far0::ShowMenu(ModuleToolOptions from)
 	String^ sInvoke = "&Invoke";
 	String^ sPanels = "&Panels";
 	String^ sDrawers = "&Drawers";
-	String^ sEditors = "&Editors";
-	String^ sViewers = "&Viewers";
+	String^ sWindows = "&Windows";
 	String^ sConsole = "&Console";
 	String^ sSettings = "&Settings";
 
@@ -805,15 +736,12 @@ void Far0::ShowMenu(ModuleToolOptions from)
 	if (from == ModuleToolOptions::Panels)
 		menu->Add(sPanels);
 
-	// Editors
-	// Viewers
-	if (from != ModuleToolOptions::Dialog)
-	{
-		if (from == ModuleToolOptions::Editor)
-			menu->Add(sDrawers);
-		menu->Add(sEditors);
-		menu->Add(sViewers);
-	}
+	// Drawers
+	if (from == ModuleToolOptions::Editor)
+		menu->Add(sDrawers);
+
+	// Windows
+	menu->Add(sWindows);
 
 	// Console
 	menu->Add(sConsole);
@@ -830,10 +758,8 @@ void Far0::ShowMenu(ModuleToolOptions from)
 		Works::SettingsUI::ShowSettings(Works::ModuleLoader::GatherModuleManagers());
 	else if (Object::ReferenceEquals(text, sPanels))
 		Works::PanelTools::ShowPanelsMenu();
-	else if (Object::ReferenceEquals(text, sEditors))
-		Works::EditorTools::ShowEditorsMenu();
-	else if (Object::ReferenceEquals(text, sViewers))
-		Works::EditorTools::ShowViewersMenu();
+	else if (Object::ReferenceEquals(text, sWindows))
+		Works::EditorTools::ShowWindowsMenu();
 	else if (Object::ReferenceEquals(text, sDrawers))
 		ShowDrawersMenu();
 	else if (Object::ReferenceEquals(text, sInvoke))
@@ -950,19 +876,16 @@ bool Far0::InvokeCommand(const wchar_t* command, OPENFROM from)
 	bool isAsync = command[0] == ':';
 	if (isAsync)
 		++command;
-	bool isAsync2 = command[0] == ':';
-	if (isAsync2)
-		++command;
 
 	// find the colon
 	const wchar_t* colon = wcschr(command, ':');
 
-	// missing colon is possible from macro or input
-	if (!colon)
-		throw gcnew InvalidOperationException("Commands should start with prefixes.");
-
-	// get the prefix
+	// command prefix
 	auto prefix = gcnew String(command, 0, (int)(colon - command));
+	if (!prefix->Length)
+		throw gcnew InvalidOperationException("Command should start with `prefix:` (sync) or `:prefix:` (async).");
+
+	// command text
 	auto text = gcnew String(colon + 1);
 
 	// case: script
@@ -986,10 +909,7 @@ bool Far0::InvokeCommand(const wchar_t* command, OPENFROM from)
 		if (isAsync)
 		{
 			Action^ handler = gcnew Action(gcnew CommandJob(it, e), &CommandJob::Invoke);
-			if (isAsync2)
-				Far::Api->PostStep(handler);
-			else
-				Far::Api->PostJob(handler);
+			Far::Api->PostJob(handler);
 			return true;
 		}
 

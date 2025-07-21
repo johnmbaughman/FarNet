@@ -1,5 +1,4 @@
 ﻿using FarNet;
-using System.Linq;
 
 namespace RedisKit.Panels;
 
@@ -8,17 +7,24 @@ class HashPanel : BasePanel<HashExplorer>
 	public HashPanel(HashExplorer explorer) : base(explorer)
 	{
 		SortMode = PanelSortMode.Name;
-		ViewMode = 0;
 
 		var cn = new SetColumn { Kind = "N", Name = "Field" };
 		var cz = new SetColumn { Kind = "Z", Name = "Value" };
 
-		var plan0 = new PanelPlan { Columns = [cn, cz] };
+		PanelPlan plan0;
+		if (Explorer.Eol)
+		{
+			var cm = new SetColumn { Kind = "DM", Name = "EOL" };
+			plan0 = new PanelPlan { Columns = [cn, cz, cm] };
+		}
+		else
+		{
+			plan0 = new PanelPlan { Columns = [cn, cz] };
+		}
+
 		SetPlan(0, plan0);
 
-		var plan9 = plan0.Clone();
-		plan9.IsFullScreen = true;
-		SetPlan((PanelViewMode)9, plan9);
+		SetView(plan0);
 	}
 
 	protected override string HelpTopic => "hash-panel";

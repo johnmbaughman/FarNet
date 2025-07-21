@@ -1,14 +1,19 @@
 ﻿using FarNet;
+using FarNet.Redis;
 using RedisKit.Commands;
 using StackExchange.Redis;
-using System;
-using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 namespace RedisKit.Panels;
 
-class KeysExplorer : BaseExplorer
+sealed class KeysExplorer : BaseExplorer
 {
 	public static Guid MyTypeId = new("5b2529ff-5482-46e5-b730-f9bdecaab8cc");
+
+	const string RedisTypeString = "*";
+	const string RedisTypeHash = "H";
+	const string RedisTypeList = "L";
+	const string RedisTypeSet = "S";
 
 	// Means folders mode and defines the folder separator.
 	readonly string? _colon;
@@ -89,13 +94,6 @@ class KeysExplorer : BaseExplorer
 	string ToFileName(RedisKey key) =>
 		_prefix is null ? (string)key! : ((string)key!)[_prefix.Length..];
 
-	public override string ToString()
-	{
-		var name = _colon is { } ? "Tree" : "Keys";
-		var info = _prefix ?? _pattern ?? Database.Multiplexer.Configuration;
-		return $"{name} {info}";
-	}
-
 	public Files.KeyInput GetNameInput(FarFile file)
 	{
 		string name = file.IsDirectory ? file.DataFolder().Prefix : (string)file.DataKey().Key!;
@@ -124,6 +122,13 @@ class KeysExplorer : BaseExplorer
 		return new KeysPanel(this);
 	}
 
+	protected override string PanelTitle()
+	{
+		var name = _colon is { } ? "Tree" : "Keys";
+		var info = _prefix ?? _pattern ?? Database.Multiplexer.Configuration;
+		return $"{name} {info}";
+	}
+
 	public override void EnterPanel(Panel panel)
 	{
 		base.EnterPanel(panel);
@@ -143,7 +148,10 @@ class KeysExplorer : BaseExplorer
 		var keys = server.Keys(Database.Database, _pattern);
 		var now = DateTime.Now;
 
-		var folders = _colon is { } ? new Dictionary<string, int>() : null;
+		Dictionary<string, int>? folders = null;
+		Dictionary<string, int>.AlternateLookup<ReadOnlySpan<char>> lookup;
+		if (_colon is { })
+			lookup = (folders = []).GetAlternateLookup<ReadOnlySpan<char>>();
 
 		foreach (RedisKey key in keys)
 		{
@@ -155,11 +163,8 @@ class KeysExplorer : BaseExplorer
 				int index = name.IndexOf(_colon);
 				if (index >= 0 && IsFolderName(name, index))
 				{
-					var nameAndColon = name[..(index + _colon.Length)];
-					if (folders!.TryGetValue(nameAndColon, out int count))
-						folders[nameAndColon] = count + 1;
-					else
-						folders.Add(nameAndColon, 1);
+					var nameAndColon = name.AsSpan(0, index + _colon.Length);
+					++CollectionsMarshal.GetValueRefOrAddDefault(lookup, nameAndColon, out _);
 					continue;
 				}
 			}
@@ -175,16 +180,16 @@ class KeysExplorer : BaseExplorer
 			switch (type)
 			{
 				case RedisType.String:
-					file.Owner = "*";
+					file.Owner = RedisTypeString;
 					break;
 				case RedisType.Hash:
-					file.Owner = "H";
+					file.Owner = RedisTypeHash;
 					break;
 				case RedisType.List:
-					file.Owner = "L";
+					file.Owner = RedisTypeList;
 					break;
 				case RedisType.Set:
-					file.Owner = "S";
+					file.Owner = RedisTypeSet;
 					break;
 			}
 
@@ -420,22 +425,90 @@ class KeysExplorer : BaseExplorer
 
 	public override void GetContent(GetContentEventArgs args)
 	{
-		var key = args.File.DataKey().Key;
-		var text = (string?)Database.StringGet(key);
-		if (text is null)
+		try
+		{
+			var key = args.File.DataKey().Key;
+			var type = Database.KeyType(key);
+
+			args.CanSet = true;
+			args.EditorOpened = (s, e) =>
+			{
+				var editor = (IEditor)s!;
+				editor.Title = $"{type} {key}";
+			};
+
+			switch (type)
+			{
+				case RedisType.String:
+					{
+						args.UseText = About.StringToText(Database, key);
+						args.UseFileExtension = EditCommand.GetFileExtension(key.ToString());
+					}
+					break;
+				case RedisType.Hash:
+					{
+						args.UseText = About.HashToText(Database, key);
+					}
+					break;
+				case RedisType.List:
+					{
+						args.UseText = About.ListToText(Database, key);
+					}
+					break;
+				case RedisType.Set:
+					{
+						args.UseText = About.SetToText(Database, key);
+					}
+					break;
+				default:
+					{
+						args.Result = JobResult.Ignore;
+					}
+					return;
+			}
+		}
+		catch (Exception)
 		{
 			args.Result = JobResult.Ignore;
-			return;
 		}
-
-		args.CanSet = true;
-		args.UseText = text;
-		args.UseFileExtension = EditCommand.GetFileExtension(key.ToString());
 	}
 
 	public override void SetText(SetTextEventArgs args)
 	{
 		var key = args.File.DataKey().Key;
-		Database.StringSet(key, args.Text);
+
+		switch (args.File.Owner)
+		{
+			case RedisTypeString:
+				{
+					Database.KeyDelete(key);
+					Database.StringSet(key, args.Text);
+				}
+				break;
+			case RedisTypeHash:
+				{
+					var items = About.TextToHash(FarNet.Works.Kit.SplitLines(args.Text));
+
+					Database.KeyDelete(key);
+					Database.HashSet(key, items);
+				}
+				break;
+			case RedisTypeList:
+				{
+					var items = FarNet.Works.Kit.SplitLines(args.Text).ToRedisValueArray();
+
+					Database.KeyDelete(key);
+					Database.ListRightPush(key, items);
+				}
+				break;
+			case RedisTypeSet:
+				{
+					var items = FarNet.Works.Kit.SplitLines(args.Text).ToRedisValueArray();
+
+					Database.KeyDelete(key);
+					Database.SetAdd(key, items);
+				}
+				break;
+		}
 	}
 }

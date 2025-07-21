@@ -1,0 +1,80 @@
+﻿https://www.nuget.org/packages/FarNet.JsonKit
+
+= 0.4.2 =
+
+Requires FarNet 9.0.14, removes obsolete code.
+
+= 0.4.1 =
+
+Amend "Edit array of strings" saving.
+
+= 0.4.0 =
+
+Add menu "Edit array of strings".
+
+JsonPath.Net 2.1.0
+
+= 0.3.3 =
+
+Requires FarNet 9.0.9, command refactoring.
+
+= 0.3.2 =
+
+Refactor panels.
+
+= 0.3.1 =
+
+Add error "Path should have selectors".
+
+= 0.3.0 =
+
+Improve node change/update/save operations.
+
+JSON path select panels inherit source files when possible.
+
+= 0.2.4 =
+
+Fix saving wrong nodes in nested panels.
+
+= 0.2.3 =
+
+Add menu operation "Open from clipboard".
+
+= 0.2.2 =
+
+Open JSON path results in array or object panels depending on the expression
+kind (singular or not) and the result kind (single array/object or not).
+
+= 0.2.1 =
+
+Requires FarNet 9.0.4, internal tweaks.
+
+= 0.2.0 =
+
+jk:open
+- new parameter `select`: JSON path expression for selecting nodes
+- parameter `file`: the panel cursor file is used by default
+
+= 0.1.2 =
+
+Show JSON paths in panel titles.
+
+Rework panel files.
+
+= 0.1.1 =
+
+Amend editing and saving.
+
+= 0.1.0 =
+
+JSON editing and saving.
+
+= 0.0.2 =
+
+Requires FarNet 9.0.3, uses common CommandParameters.
+
+= 0.0.1 =
+
+jk:open
+- array panel
+- object panel

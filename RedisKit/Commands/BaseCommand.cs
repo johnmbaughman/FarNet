@@ -1,30 +1,35 @@
 ﻿using FarNet;
 using StackExchange.Redis;
-using System;
-using System.Data.Common;
-using System.Linq;
 
 namespace RedisKit.Commands;
 
-abstract class BaseCommand : AnyCommand
+abstract class BaseCommand : AbcCommand
 {
 	protected IDatabase Database { get; }
 
-	protected BaseCommand()
+	protected BaseCommand(CommandParameters parameters)
 	{
-		Database = OpenDatabase(GetRedisConfiguration());
+		var config = parameters.GetString(Param.Redis);
+		var index = parameters.GetValue(Param.DB, -1);
+		Database = OpenDatabase(GetRedisConfiguration(config), index);
 	}
 
-	protected BaseCommand(DbConnectionStringBuilder parameters)
+	protected RedisKey GetRequiredRedisKeyOfType(CommandParameters parameters, RedisType expectedType)
 	{
-		Database = OpenDatabase(GetRedisConfiguration(parameters.GetString(Host.Param.Redis)));
+		RedisKey key = parameters.GetRequiredString(Param.Key);
+
+		var actualType = Database.KeyType(key);
+		if (actualType != expectedType && actualType != RedisType.None)
+			throw parameters.ParameterError(Param.Key, $"The existing key is '{actualType}', not '{expectedType}'.");
+
+		return key;
 	}
 
-	static IDatabase OpenDatabase(string configuration)
+	static IDatabase OpenDatabase(string configuration, int index)
 	{
 		try
 		{
-			return DB.Open(configuration);
+			return DB.Open(configuration, index);
 		}
 		catch (Exception ex)
 		{
@@ -47,10 +52,11 @@ abstract class BaseCommand : AnyCommand
 			else
 			{
 				// find by name
-				configuration = configurations
-					.FirstOrDefault(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
-					?.Text
-					?? throw new ModuleException($"Cannot find Redis configuration '{name}' in settings.");
+				configuration = configurations.FirstOrDefault(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase))?.Text
+					?? throw new ModuleException($"""
+					Cannot find Redis configuration '{name}' in settings.
+					Select existing using F11 / RedisKit / Configuration.
+					""");
 			}
 		}
 		else

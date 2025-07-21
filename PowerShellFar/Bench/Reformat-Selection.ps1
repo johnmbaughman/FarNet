@@ -1,6 +1,6 @@
 <#
 .Synopsis
-	Reformats selected lines or the current line in the editor.
+	Reformats selected lines or current paragraph in editor.
 	Author: Roman Kuzmin
 
 .Description
@@ -29,7 +29,6 @@ param(
 )
 
 [char[]]$_splitters = @(' ', "`t")
-$_debug = $env:ReformatSelectionDebug
 
 # split and format text
 function split_text([string]$text, [int]$len, [string]$pref, [string]$type) {
@@ -91,13 +90,16 @@ function split_text([string]$text, [int]$len, [string]$pref, [string]$type) {
 function do_text([string]$text, [int]$len, [string]$pref, [string]$type) {
 	$res = split_text $text $len $pref $type
 	if ($res -is [string] -or $res.Count -eq 2) {
-		return $res
+		$res
+		''
+		return
 	}
 	$res2 = split_text $text ($len - 1) $pref $type
 	$res3 = split_text $text ($len - 2) $pref $type
 	$res4 = split_text $text ($len - 3) $pref $type
 	$res5 = split_text $text ($len - 4) $pref $type
 	do_best $res $res2 $res3 $res4 $res5
+	''
 }
 
 # get formatted lines penalty
@@ -119,10 +121,6 @@ function do_best {
 		}
 	}
 	$cases = $cases | Sort-Object penalty, index
-	if ($_debug) {
-		$str = $cases.ForEach{"[$($_.index)/$($_.penalty)]"} -join ' '
-		[System.Diagnostics.Debug]::WriteLine($str)
-	}
 	$cases[0].lines
 }
 
@@ -140,19 +138,51 @@ $type = ''
 switch -regex ([System.IO.Path]::GetExtension($Editor.FileName)) {
 	'\.(?:md|markdown|text)$' { $pattern = ' {0,3}(?:>|(?:[*+\-:]|\d+\.)\s+)'; $type = 'md'; break }
 	'\.(?:txt|hlf)' { $pattern = '$'; break }
-	'\.(?:ps1|psd1|psm1|pl|pls|py|pyw|pys|R|rb|rbw|ruby|rake|php\d?)$' { $pattern = '#+'; break }
+	'\.(?:ps1|psd1|psm1)$' { $pattern = '#+'; $type = 'ps'; break }
+	'\.(?:pl|pls|py|pyw|pys|R|rb|rbw|ruby|rake|php\d?)$' { $pattern = '#+'; break }
 	'\.(?:bat|cmd)$' { $pattern = '::+|rem\s'; break }
 	'\.(?:sql|lua)$' { $pattern = '--+'; break }
 	'\.(?:vb|vbs|bas|vbp|frm|cls)$' { $pattern = "'+"; break }
 	default { $pattern = '(?://+|;+)' }
 }
 
-# get selected lines or current line
-$lines = $Editor.SelectedLines
-if (!$lines.Count) {
-	$line = $Editor.Line
-	$line.SelectText(0, $line.Length)
-	$lines = @($line)
+### get selected or paragraph
+$lines = @($Editor.SelectedLines)
+if (!$lines) {
+	# empty current line?
+	if (!$Editor.Line.Text.Trim()) {
+		return
+	}
+
+	# paragraph head and tail
+	$y1 = $y2 = $Editor.Caret.Y
+
+	# find head
+	for($$ = $y1 - 1; $$ -ge 0; --$$) {
+		$text = $Editor[$$].Text.Trim()
+		if (!$text -or ($type -eq 'ps' -and $text -match '^(\s*#*\s*)\.|^<#|@[''"]$')) {
+			break
+		}
+		$y1 = $$
+	}
+
+	# find tail
+	$n = $Editor.Count
+	for($$ = $y2 + 1; $$ -lt $n; ++$$) {
+		$text = $Editor[$$].Text.Trim()
+		if (!$text -or ($type -eq 'ps' -and $text -match '^#>|^[''"]@')) {
+			break
+		}
+		$y2 = $$
+	}
+
+	# select and get lines
+	$Editor.SelectText(0, $y1, -1, $y2 + 1)
+	$lines = @(
+		for($$ = $y1; $$ -le $y2; ++$$) {
+			$Editor[$$]
+		}
+	)
 }
 if ($lines[0] -notmatch "^(\s*)($pattern)?(\s*)\S") {
 	return
@@ -183,11 +213,12 @@ foreach($line in $lines) {
 }
 
 # split, insert
-$res = do_text $text $len $pref $type
-if ($lines.Count -ge 2) {
-	$res += ''
-}
+$strings = do_text $text $len $pref $type
 $Editor.BeginUndo()
 $Editor.DeleteText()
-$Editor.InsertText(($res -join "`r"))
+$Editor.InsertText(($strings -join "`n"))
 $Editor.EndUndo()
+
+# go to last string end
+$y = $Editor.Caret.Y - 1
+$Editor.GoTo($Editor[$y].Length, $y)

@@ -14,19 +14,13 @@ $ModuleRoot = "$FarHome\FarNet\Modules\$ModuleName"
 $Description = 'F# scripting and interactive services in Far Manager.'
 
 task build meta, {
-	exec { dotnet build "src\$ModuleName.sln" -c $Configuration "/p:FarHome=$FarHome" }
+	exec { dotnet build -c $Configuration "/p:FarHome=$FarHome" }
 }
 
 task publish {
-	exec { dotnet publish "src\$ModuleName\$ModuleName.fsproj" -c $Configuration -o $ModuleRoot --no-build }
-
 	$xml = [xml](Get-Content "src\$ModuleName\$ModuleName.fsproj")
 	$node = $xml.SelectSingleNode('Project/ItemGroup/PackageReference[@Include="FSharp.Core"]')
 	Copy-Item "$HOME\.nuget\packages\FSharp.Core\$($node.Version)\lib\netstandard2.1\FSharp.Core.xml" $ModuleRoot
-
-	# used to be deleted, now missing: runtimes\unix
-	Set-Location $ModuleRoot
-	remove *.deps.json, cs, de, es, fr, it, ja, ko, pl, pt-BR, ru, tr, zh-Hans, zh-Hant
 }
 
 task clean {
@@ -40,25 +34,27 @@ task clean {
 }
 
 task version {
-	($script:Version = switch -regex -file History.txt {'^= (\d+\.\d+\.\d+) =$' {$matches[1]; break}})
+	($Script:Version = Get-BuildVersion History.txt '^= (\d+\.\d+\.\d+) =$')
 }
 
 task meta -Inputs .build.ps1, History.txt -Outputs src/Directory.Build.props -Jobs version, {
 	Set-Content src/Directory.Build.props @"
 <Project>
 	<PropertyGroup>
+		<Description>$Description</Description>
 		<Company>https://github.com/nightroman/FarNet</Company>
 		<Copyright>Copyright (c) Roman Kuzmin</Copyright>
-		<Description>$Description</Description>
 		<Product>FarNet.FSharpFar</Product>
 		<Version>$Version</Version>
+		<SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+		<IncludeSourceRevisionInInformationalVersion>False</IncludeSourceRevisionInInformationalVersion>
 	</PropertyGroup>
 </Project>
 "@
 }
 
 task markdown {
-	assert (Test-Path $env:MarkdownCss)
+	requires -Path $env:MarkdownCss
 	exec { pandoc.exe @(
 		'README.md'
 		'--output=README.htm'
@@ -75,8 +71,7 @@ task package markdown, {
 	$toModule = mkdir "z\tools\FarHome\FarNet\Modules\$ModuleName"
 
 	# module
-	exec { robocopy $ModuleRoot $toModule /s /xf *.pdb } (0..2)
-	equals 10 (Get-ChildItem $toModule -Recurse -File).Count
+	exec { robocopy $ModuleRoot $toModule /s /xf *.pdb } 1
 
 	# meta
 	Copy-Item -Destination z @(
@@ -90,15 +85,27 @@ task package markdown, {
 		'History.txt'
 		'..\LICENSE'
 	)
+
+	Assert-SameFile.ps1 -Text -View $env:MERGE -Result (Get-ChildItem $toModule -Recurse -File -Name) -Sample @'
+FarNet.FSharp.dll
+FarNet.FSharp.xml
+FSharp.Compiler.Service.dll
+FSharp.Core.dll
+FSharp.Core.xml
+FSharp.DependencyManager.Nuget.dll
+FSharpFar.dll
+fsx.dll
+fsx.exe
+fsx.runtimeconfig.json
+History.txt
+LICENSE
+README.htm
+'@
 }
 
 task nuget package, version, {
-	# test versions
-	$dllPath = "$ModuleRoot\$ModuleName.dll"
-	($dllVersion = (Get-Item $dllPath).VersionInfo.FileVersion.ToString())
-	assert $dllVersion.StartsWith("$Version.") 'Versions mismatch.'
+	equals (Get-Item "$ModuleRoot\$ModuleName.dll").VersionInfo.ProductVersion "$Version.0"
 
-	# nuspec
 	Set-Content z\Package.nuspec @"
 <?xml version="1.0"?>
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
@@ -117,26 +124,30 @@ task nuget package, version, {
 	</metadata>
 </package>
 "@
-	# pack
+
 	exec { NuGet pack z\Package.nuspec }
 }
 
+task test_psf_ib {
+	Start-Far 'ps: Invoke-Build ** tests\PSF.test' -Test 500
+}
+
+task test_psf_fas {
+	Start-Far "ps: ..\..\..\Test\Test-FarNet.ps1 * -Quit" .\tests\PSF.test -ReadOnly
+}
+
 task test_testing {
-	Start-Far "fs: exec: file=$env:FarNetCode\FSharpFar\samples\Testing\App1.fsx" -ReadOnly -Title Testing -Environment @{QuitFarAfterTests=1}
+	Start-Far "fs:exec file=$env:FarNetCode\FSharpFar\samples\Testing\App1.fsx" -ReadOnly -Environment @{QuitFarAfterTests=1}
 }
 
 task test_tests {
-	Start-Far "fs: exec: file=$env:FarNetCode\FSharpFar\tests\App1.fsx" -ReadOnly -Title Tests -Environment @{QuitFarAfterTests=1}
-}
-
-task test_tasks {
-	Start-Far "ps: Test.far.ps1 * -Quit" $env:FarNetCode\FSharpFar\tests\PSF.test -ReadOnly -Title FSharpFar\PSF.test
+	Start-Far "fs:exec file=$env:FarNetCode\FSharpFar\tests\App1.fsx" -ReadOnly -Environment @{QuitFarAfterTests=1}
 }
 
 task test_fsx {
-	Invoke-Build Test src\fsx\.build.ps1
+	Invoke-Build test src\fsx
 }
 
-task test test_tasks, test_tests, test_testing, test_fsx
+task test test_psf_ib, test_psf_fas, test_testing, test_tests, test_fsx
 
 task . build, clean

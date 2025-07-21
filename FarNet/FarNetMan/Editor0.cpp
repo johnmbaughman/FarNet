@@ -33,7 +33,6 @@ namespace FarNet
 
 		// create and connect; rare case, e.g. the editor is opened before the core is loaded
 		//_110624_153138 http://forum.farmanager.com/viewtopic.php?f=8&t=6500
-		Log::Source->TraceInformation("Connecting existing editor");
 		Editor^ editor = gcnew Editor;
 		ConnectEditor(editor, ei, false);
 		return editor;
@@ -57,7 +56,6 @@ namespace FarNet
 			_started = true;
 			if (_anyEditor._FirstOpening)
 			{
-				Log::Source->TraceInformation("FirstOpening");
 				_anyEditor._FirstOpening(editor, nullptr);
 				_anyEditor._FirstOpening = nullptr;
 			}
@@ -75,17 +73,11 @@ namespace FarNet
 
 		// 2) event for any editor handlers, they add this editor handlers
 		if (_anyEditor._Opened)
-		{
-			Log::Source->TraceInformation("Opened");
 			_anyEditor._Opened(editor, nullptr);
-		}
 
 		// 3) event for this editor handlers
 		if (editor->_Opened)
-		{
-			Log::Source->TraceInformation("Opened");
 			editor->_Opened(editor, nullptr);
-		}
 	}
 
 	int Editor0::AsProcessEditorEvent(const ProcessEditorEventInfo* info)
@@ -94,8 +86,6 @@ namespace FarNet
 		{
 		case EE_READ:
 		{
-			Log::Source->TraceInformation("EE_READ");
-
 			// pop the waiting or create new
 			Editor^ editor;
 			bool isEditorWaiting;
@@ -120,8 +110,6 @@ namespace FarNet
 		break;
 		case EE_CLOSE:
 		{
-			Log::Source->TraceInformation("EE_CLOSE");
-
 			// get registered, stop, unregister
 			int index = FindEditor(info->EditorID);
 			Editor^ editor = _editors[index];
@@ -131,17 +119,11 @@ namespace FarNet
 			// end async
 			editor->EndAsync();
 
-			// event, after the above
+			// events, after the above
 			if (_anyEditor._Closed)
-			{
-				Log::Source->TraceInformation("Closed");
 				_anyEditor._Closed(editor, nullptr);
-			}
 			if (editor->_Closed)
-			{
-				Log::Source->TraceInformation("Closed");
 				editor->_Closed(editor, nullptr);
-			}
 
 			// delete the file after all
 			DeleteSourceOptional(editor->FileName, editor->DeleteSource);
@@ -149,8 +131,6 @@ namespace FarNet
 		break;
 		case EE_SAVE:
 		{
-			Log::Source->TraceInformation("EE_SAVE");
-
 			Editor^ editor = _editors[FindEditor(info->EditorID)];
 			editor->_TimeOfSave = DateTime::Now;
 
@@ -158,7 +138,6 @@ namespace FarNet
 			{
 				EditorSaveFile* esf = (EditorSaveFile*)info->Param;
 				EditorSavingEventArgs ea(gcnew String(esf->FileName), (int)esf->CodePage);
-				Log::Source->TraceInformation("Saving");
 				if (_anyEditor._Saving)
 					_anyEditor._Saving(editor, % ea);
 				if (editor->_Saving)
@@ -168,13 +147,12 @@ namespace FarNet
 		break;
 		case EE_CHANGE:
 		{
-			Log::Source->TraceEvent(TraceEventType::Verbose, 0, "EE_CHANGE");
-
 			Editor^ editor = _editors[FindEditor(info->EditorID)];
+
+			++editor->_ChangeCount;
 
 			if (_anyEditor._Changed || editor->_Changed)
 			{
-				Log::Source->TraceEvent(TraceEventType::Verbose, 0, "Changed");
 				EditorChange* ec = (EditorChange*)info->Param;
 				EditorChangedEventArgs ea((EditorChangeKind)ec->Type, (int)ec->StringNumber);
 				if (_anyEditor._Changed)
@@ -186,8 +164,6 @@ namespace FarNet
 		break;
 		case EE_REDRAW:
 		{
-			Log::Source->TraceEvent(TraceEventType::Verbose, 0, "EE_REDRAW");
-
 			// Far 3.0.4027 EE_REDRAW is called before EE_READ
 			int index = FindEditor(info->EditorID);
 			if (index < 0)
@@ -196,11 +172,12 @@ namespace FarNet
 
 			if (_anyEditor._Redrawing || editor->_Redrawing || editor->_drawers)
 			{
-				Log::Source->TraceEvent(TraceEventType::Verbose, 0, "Redrawing");
 				if (_anyEditor._Redrawing)
 					_anyEditor._Redrawing(editor, nullptr);
+
 				if (editor->_Redrawing)
 					editor->_Redrawing(editor, nullptr);
+
 				if (editor->_drawers)
 					editor->InvokeDrawers();
 			}
@@ -208,17 +185,8 @@ namespace FarNet
 		break;
 		case EE_GOTFOCUS:
 		{
-			Log::Source->TraceEvent(TraceEventType::Verbose, 0, "EE_GOTFOCUS");
-
 			int index = FindEditor(info->EditorID);
 			Editor^ editor = index < 0 ? nullptr : _editors[index];
-
-			// make the editor first in the list
-			if (index > 0)
-			{
-				_editors.RemoveAt(index);
-				_editors.Insert(0, editor);
-			}
 
 			//_110624_153138 rare case
 			if (!editor)
@@ -229,33 +197,23 @@ namespace FarNet
 
 				editor = GetCurrentEditor();
 				if ((intptr_t)editor->Id != info->EditorID)
-				{
-					Log::Source->TraceInformation("EE_GOTFOCUS: cannot connect editor");
 					break;
-				}
 			}
 
-			// sync
+			editor->_TimeOfGotFocus = DateTime::Now;
+
 			if (editor->_output)
 				editor->Sync();
 
-			// event
 			if (_anyEditor._GotFocus)
-			{
-				Log::Source->TraceEvent(TraceEventType::Verbose, 0, "GotFocus");
 				_anyEditor._GotFocus(editor, nullptr);
-			}
+
 			if (editor->_GotFocus)
-			{
-				Log::Source->TraceEvent(TraceEventType::Verbose, 0, "GotFocus");
 				editor->_GotFocus(editor, nullptr);
-			}
 		}
 		break;
 		case EE_KILLFOCUS:
 		{
-			Log::Source->TraceEvent(TraceEventType::Verbose, 0, "EE_KILLFOCUS");
-
 			int index = FindEditor(info->EditorID);
 			Editor^ editor = index < 0 ? nullptr : _editors[index];
 
@@ -264,22 +222,14 @@ namespace FarNet
 			{
 				editor = GetCurrentEditor();
 				if ((intptr_t)editor->Id != info->EditorID)
-				{
-					Log::Source->TraceInformation("EE_KILLFOCUS: cannot connect editor");
 					break;
-				}
 			}
 
 			if (_anyEditor._LosingFocus)
-			{
-				Log::Source->TraceEvent(TraceEventType::Verbose, 0, "LosingFocus");
 				_anyEditor._LosingFocus(editor, nullptr);
-			}
+
 			if (editor->_LosingFocus)
-			{
-				Log::Source->TraceEvent(TraceEventType::Verbose, 0, "LosingFocus");
 				editor->_LosingFocus(editor, nullptr);
-			}
 		}
 		break;
 		}

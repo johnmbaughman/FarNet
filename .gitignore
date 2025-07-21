@@ -1,4 +1,3 @@
-
 .vs
 bin
 obj
@@ -6,8 +5,11 @@ ipch
 Debug
 Release
 Properties
+TestResults
 z
+
 z.*
+*.clixml
 *.opendb
 *.opensdf
 *.sdf

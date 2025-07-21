@@ -1,9 +1,7 @@
-﻿using FarNet;
-using GitKit.Extras;
+﻿
+using FarNet;
+using GitKit.About;
 using LibGit2Sharp;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace GitKit.Panels;
 
@@ -11,15 +9,14 @@ class ChangesExplorer : BaseExplorer
 {
 	public static Guid MyTypeId = new("7b4c229a-949e-4100-856e-45c17d516d25");
 	readonly Options _op;
-	Panel? _panel;
 
 	internal class Options
 	{
 		public Kind Kind;
-		public Commit? NewCommit;
-		public Commit? OldCommit;
+		public string? NewCommitSha;
+		public string? OldCommitSha;
 		public bool IsSingleCommit;
-		public string? Path;
+		public string? ItemPath;
 	}
 
 	internal enum Kind
@@ -32,90 +29,120 @@ class ChangesExplorer : BaseExplorer
 		Last,
 	}
 
-	public ChangesExplorer(Repository repository, Options op) : base(repository, MyTypeId)
+	public ChangesExplorer(string gitDir, Options op) : base(gitDir, MyTypeId)
 	{
 		_op = op;
 		CanGetContent = true;
+		CanOpenFile = true;
 	}
+
+	internal bool IsLast => _op.Kind switch
+	{
+		Kind.NotCommitted => true,
+		Kind.NotStaged => true,
+		Kind.Last => true,
+		_ => false
+	};
 
 	public override Panel CreatePanel()
 	{
 		return new ChangesPanel(this);
 	}
 
-	public override void EnterPanel(Panel panel)
-	{
-		_panel = panel;
-
-		panel.PostName(_op.Path);
-
-		base.EnterPanel(panel);
-	}
-
 	public override IEnumerable<FarFile> GetFiles(GetFilesEventArgs args)
 	{
+		using var repo = new Repository(GitDir);
+
+		// init panel
+		ChangesPanel? panel = null;
+		if (args.Panel is ChangesPanel test && test.Title is null)
+		{
+			panel = test;
+			panel.PostName(_op.ItemPath);
+			panel.GitWork = repo.Info.WorkingDirectory;
+			panel.CurrentLocation = panel.GitWork ?? "*";
+		}
+
 		TreeChanges changes;
-		string title;
 		switch (_op.Kind)
 		{
 			case Kind.NotCommitted:
 				{
-					changes = Lib.GetChanges(Repository);
-					title = $"Not committed changes {Repository.Info.WorkingDirectory}";
+					changes = Lib.GetChanges(repo);
+
+					if (panel is { })
+						panel.Title = $"Not committed changes {panel.GitWork}";
 				}
 				break;
 
 			case Kind.NotStaged:
 				{
-					changes = Repository.Diff.Compare<TreeChanges>();
-					title = $"Not staged changes {Repository.Info.WorkingDirectory}";
+					changes = repo.Diff.Compare<TreeChanges>();
+
+					if (panel is { })
+						panel.Title = $"Not staged changes {panel.GitWork}";
 				}
 				break;
 
 			case Kind.Staged:
 				{
-					changes = Repository.Diff.Compare<TreeChanges>(Repository.Head.Tip?.Tree, DiffTargets.Index);
-					title = $"Staged changes {Repository.Info.WorkingDirectory}";
+					changes = repo.Diff.Compare<TreeChanges>(repo.Head.Tip?.Tree, DiffTargets.Index);
+
+					if (panel is { })
+						panel.Title = $"Staged changes {panel.GitWork}";
 				}
 				break;
 
 			case Kind.Head:
 				{
-					var tip = Repository.Head.Tip;
-					changes = Lib.CompareTrees(Repository, tip?.Parents.FirstOrDefault()?.Tree, tip?.Tree);
-					title = $"Head commit: {tip?.MessageShort}";
+					var tip = repo.Head.Tip;
+					changes = Lib.CompareTrees(repo, tip?.Parents.FirstOrDefault()?.Tree, tip?.Tree);
+
+					if (panel is { })
+						panel.Title = $"Head commit: {tip?.MessageShort}";
 				}
 				break;
 
 			case Kind.Last:
 				{
-					changes = Lib.GetChanges(Repository);
+					changes = Lib.GetChanges(repo);
+
 					if (changes.Count > 0)
 					{
-						title = $"Last not committed {Repository.Info.WorkingDirectory}";
+						if (panel is { })
+							panel.Title = $"Last not committed {panel.GitWork}";
 					}
 					else
 					{
-						var tip = Repository.Head.Tip;
-						changes = Lib.CompareTrees(Repository, tip?.Parents.FirstOrDefault()?.Tree, tip?.Tree);
-						title = $"Last commit: {tip?.MessageShort}";
+						var tip = repo.Head.Tip;
+						changes = Lib.CompareTrees(repo, tip?.Parents.FirstOrDefault()?.Tree, tip?.Tree);
+
+						if (panel is { })
+							panel.Title = $"Last commit: {tip?.MessageShort}";
 					}
 				}
 				break;
 
 			case Kind.CommitsRange:
 				{
-					changes = Lib.CompareTrees(Repository, _op.OldCommit?.Tree, _op.NewCommit?.Tree);
-					var settings = Settings.Default.GetData();
-					var newId = _op.NewCommit is null ? "?" : _op.NewCommit.Sha[0..settings.ShaPrefixLength];
-					if (_op.IsSingleCommit)
+					var newCommit = _op.NewCommitSha is null ? null : repo.Lookup<Commit>(_op.NewCommitSha);
+					var oldCommit = _op.OldCommitSha is null ? null : repo.Lookup<Commit>(_op.OldCommitSha);
+
+					changes = Lib.CompareTrees(repo, oldCommit?.Tree, newCommit?.Tree);
+
+					if (panel is { })
 					{
-						title = $"{newId}: {_op.NewCommit?.MessageShort}";
-					}
-					else
-					{
-						var oldId = _op.OldCommit is null ? "?" : _op.OldCommit.Sha[0..settings.ShaPrefixLength];
-						title = $"{newId}/{oldId} {Repository.Info.WorkingDirectory}";
+						var settings = Settings.Default.GetData();
+						var newId = _op.NewCommitSha is null ? "?" : _op.NewCommitSha[0..settings.ShaPrefixLength];
+						if (_op.IsSingleCommit)
+						{
+							panel.Title = $"{newId}: {newCommit?.MessageShort}";
+						}
+						else
+						{
+							var oldId = _op.OldCommitSha is null ? "?" : _op.OldCommitSha[0..settings.ShaPrefixLength];
+							panel.Title = $"{newId}/{oldId} {panel.GitWork}";
+						}
 					}
 				}
 				break;
@@ -124,41 +151,39 @@ class ChangesExplorer : BaseExplorer
 				throw null!;
 		}
 
-		if (_panel is not null)
-			_panel.Title = title;
-
 		//! Used to set renamed Name = new << old. This breaks `PostName`.
 		//! Keep Name, it is useful as is. Use [CtrlA] to see old names.
 		foreach (var change in changes)
 		{
-			yield return new SetFile
-			{
-				Name = change.Path,
-				Description = change.Status.ToString(),
-				Data = change,
-			};
+			yield return new ChangeFile(change.Path, change.Status.ToString(), change);
 		}
 	}
 
 	public override void GetContent(GetContentEventArgs args)
 	{
+		using var repo = new Repository(GitDir);
+
 		var compareOptions = new CompareOptions { ContextLines = 3 };
 
-		var changes = (TreeEntryChanges)args.File.Data!;
-		var newBlob = Repository.Lookup<Blob>(changes.Oid);
+		var file = (ChangeFile)args.File;
+		var change = file.Change;
+		var newBlob = repo.Lookup<Blob>(change.Oid);
 
 		string text;
-		if (newBlob is not null || changes.Mode == Mode.Nonexistent)
+		if (newBlob is not null || change.Mode == Mode.Nonexistent)
 		{
 			// changed committed files (new blob) or deleted files (old blob, no new blob)
-			var oldBlob = Repository.Lookup<Blob>(changes.OldOid);
-			var diff = Repository.Diff.Compare(oldBlob, newBlob, compareOptions);
+			var oldBlob = repo.Lookup<Blob>(change.OldOid);
+			var diff = repo.Diff.Compare(oldBlob, newBlob, compareOptions);
 			text = diff.Patch;
+
+			// remove BOM converted to "Zero Width No-Break Space", looks odd in editor
+			text = text.Replace("\uFEFF", string.Empty);
 		}
 		else
 		{
 			// other files including changed not committed (no new blob)
-			var patch = Repository.Diff.Compare<Patch>(new string[] { changes.Path }, true, null, compareOptions);
+			var patch = repo.Diff.Compare<Patch>([change.Path], true, null, compareOptions);
 			text = patch.Content;
 		}
 

@@ -2,8 +2,8 @@
 // FarNet plugin for Far Manager
 // Copyright (c) Roman Kuzmin
 
-using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace FarNet.Tools;
 
@@ -19,7 +19,7 @@ namespace FarNet.Tools;
 public class SuperPanel : Panel
 {
 	const string Name = "Super Panel";
-	readonly object _lock = new();
+	readonly Lock _lock = new();
 	List<FarFile>? _idleFiles;
 
 	/// <summary>
@@ -120,13 +120,9 @@ public class SuperPanel : Panel
 	/// <inheritdoc/>
 	public override bool UIKeyPressed(KeyInfo key)
 	{
-		ArgumentNullException.ThrowIfNull(key);
-
 		switch (key.VirtualKeyCode)
 		{
-			case KeyCode.F7:
-
-				if (key.Is())
+			case KeyCode.F7 when key.Is():
 				{
 					var files = GetSelectedFiles();
 					if (files.Length > 0)
@@ -137,12 +133,7 @@ public class SuperPanel : Panel
 					}
 					return true;
 				}
-
-				break;
-
-			case KeyCode.PageUp:
-
-				if (key.IsCtrl())
+			case KeyCode.PageUp when key.IsCtrl():
 				{
 					var efile = (SuperFile?)CurrentFile;
 					if (efile is null)
@@ -153,10 +144,7 @@ public class SuperPanel : Panel
 					panel.OpenChild(this);
 					return true;
 				}
-
-				break;
 		}
-
 		return base.UIKeyPressed(key);
 	}
 }

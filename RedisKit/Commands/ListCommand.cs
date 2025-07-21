@@ -1,20 +1,20 @@
-﻿using RedisKit.Panels;
+﻿using FarNet;
+using RedisKit.Panels;
 using StackExchange.Redis;
-using System;
-using System.Data.Common;
 
 namespace RedisKit.Commands;
 
-sealed class ListCommand(DbConnectionStringBuilder parameters) : BaseCommand(parameters)
+sealed class ListCommand : BaseCommand
 {
-	readonly RedisKey _key = parameters.GetRequiredString(Host.Param.Key);
+	readonly RedisKey _key;
+
+	public ListCommand(CommandParameters parameters) : base(parameters)
+	{
+		_key = GetRequiredRedisKeyOfType(parameters, RedisType.List);
+	}
 
 	public override void Invoke()
 	{
-		var type = Database.KeyType(_key);
-		if (type != RedisType.List && type != RedisType.None)
-			throw new InvalidOperationException($"Cannot open 'List', the key is '{type}'.");
-
 		new ListExplorer(Database, _key)
 			.CreatePanel()
 			.Open();

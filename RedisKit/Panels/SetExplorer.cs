@@ -1,12 +1,9 @@
 ﻿using FarNet;
 using StackExchange.Redis;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace RedisKit.Panels;
 
-class SetExplorer : BaseExplorer
+sealed class SetExplorer : BaseExplorer
 {
 	public static Guid MyTypeId = new("75bbcfef-c464-4c80-a602-83b15bf404f9");
 
@@ -25,14 +22,14 @@ class SetExplorer : BaseExplorer
 		_key = key;
 	}
 
-	public override string ToString()
-	{
-		return $"Set {_key}";
-	}
-
 	public override Panel CreatePanel()
 	{
 		return new SetPanel(this);
+	}
+
+	protected override string PanelTitle()
+	{
+		return $"Set {_key}";
 	}
 
 	public override IEnumerable<FarFile> GetFiles(GetFilesEventArgs args)

@@ -19,10 +19,6 @@ task build meta, {
 	exec { dotnet build -c $Configuration "-p:FarHome=$FarHome" }
 }
 
-task publish {
-	remove "$ModuleRoot\RedisKit.deps.json"
-}
-
 task help -Inputs README.md -Outputs $ModuleRoot\RedisKit.hlf {
 	exec { pandoc.exe $Inputs --output=README.htm --from=gfm --no-highlight }
 	exec { HtmlToFarHelp from=README.htm to=$Outputs }
@@ -34,11 +30,11 @@ task clean {
 }
 
 task version {
-	($script:Version = switch -regex -file History.txt {'^= (\d+\.\d+\.\d+) =$' {$matches[1]; break}})
+	($Script:Version = Get-BuildVersion History.txt '^= (\d+\.\d+\.\d+) =$')
 }
 
 task markdown {
-	assert (Test-Path $env:MarkdownCss)
+	requires -Path $env:MarkdownCss
 	exec { pandoc.exe @(
 		'README.md'
 		'--output=README.htm'
@@ -68,15 +64,13 @@ task package help, markdown, {
 		'..\LICENSE'
 	)
 
-	$result = Get-ChildItem z\tools -Recurse -File -Name | Out-String
-	$sample = @'
+	Assert-SameFile.ps1 -Result (Get-ChildItem z\tools -Recurse -File -Name) -Text -View $env:MERGE @'
 FarHome\FarNet\Modules\RedisKit\History.txt
 FarHome\FarNet\Modules\RedisKit\LICENSE
 FarHome\FarNet\Modules\RedisKit\README.htm
 FarHome\FarNet\Modules\RedisKit\RedisKit.dll
 FarHome\FarNet\Modules\RedisKit\RedisKit.hlf
 '@
-	Assert-SameFile.ps1 -Text $sample $result $env:MERGE
 }
 
 task meta -Inputs .build.ps1, History.txt -Outputs Directory.Build.props -Jobs version, {
@@ -125,7 +119,7 @@ task nuget package, version, {
 }
 
 task test {
-	Start-Far "ps: Test.far.ps1 * -Quit" Tests -ReadOnly -Title $PSScriptRoot
+	Start-Far "ps: Test-FarNet * -Quit" .\Tests -ReadOnly
 }
 
 task . build, help, clean

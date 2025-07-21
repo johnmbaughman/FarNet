@@ -1,14 +1,16 @@
-﻿using GitKit.Extras;
+﻿using FarNet;
+using GitKit.About;
 using LibGit2Sharp;
-using System.Data.Common;
 
 namespace GitKit.Commands;
 
-sealed class PullCommand(DbConnectionStringBuilder parameters) : BaseCommand(parameters)
+sealed class PullCommand(CommandParameters parameters) : BaseCommand(parameters)
 {
 	public override void Invoke()
 	{
-		Pull(Repository);
+		using var repo = new Repository(GitDir);
+
+		Pull(repo);
 	}
 
 	public static void Pull(Repository repo)

@@ -1,34 +1,30 @@
 ﻿
-// PowerShellFar module for Far Manager
-// Copyright (c) Roman Kuzmin
-
 using FarNet;
 using FarNet.Tools;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace PowerShellFar;
 
 class HistoryCommands : HistoryStore
 {
-	readonly string _prefix1 = Entry.CommandInvoke1.Prefix + ':';
-	readonly string _prefix2 = Entry.CommandInvoke2.Prefix + ':';
+	static readonly List<HistoryInfo> _sessionLines = [];
 
-	public bool HasPrefix(string line)
+	public static void AddSessionLine(string line)
 	{
-		return line.StartsWith(_prefix1, StringComparison.OrdinalIgnoreCase) || line.StartsWith(_prefix2, StringComparison.OrdinalIgnoreCase);
+		_sessionLines.RemoveAll(x => x.Name == line);
+		_sessionLines.Add(new(line, DateTime.Now, false));
 	}
 
-	public string RemovePrefix(string line)
+	public static bool HasPrefix(string line)
 	{
-		if (line.StartsWith(_prefix1, StringComparison.OrdinalIgnoreCase))
-			return line[_prefix1.Length..].Trim();
+		return
+			line.StartsWith(Entry.Prefix1, StringComparison.OrdinalIgnoreCase) ||
+			line.StartsWith(Entry.Prefix2, StringComparison.OrdinalIgnoreCase);
+	}
 
-		if (line.StartsWith(_prefix2, StringComparison.OrdinalIgnoreCase))
-			return line[_prefix2.Length..].Trim();
-
-		return line.Trim();
+	public static string RemovePrefix(string line)
+	{
+		FarNet.Works.Kit.SplitCommandWithPrefix(line, out var prefix, out var command, Entry.IsMyPrefix);
+		return prefix.Length == 0 ? line : command.ToString();
 	}
 
 	public override string[] ReadLines()
@@ -43,11 +39,13 @@ class HistoryCommands : HistoryStore
 				res.Add(info);
 		}
 
+		// session
+		res.AddRange(_sessionLines);
+
 		// sort and trim
-		return res
+		return [.. res
 			.OrderBy(x => x.Time)
 			.TakeLast(Settings.Default.MaximumHistoryCount)
-			.Select(x => x.Name)
-			.ToArray();
+			.Select(x => x.Name)];
 	}
 }

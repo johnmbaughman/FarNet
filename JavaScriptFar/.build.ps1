@@ -37,11 +37,11 @@ task clean {
 }
 
 task version {
-	($script:Version = switch -regex -file History.txt {'^= (\d+\.\d+\.\d+) =$' {$matches[1]; break}})
+	($Script:Version = Get-BuildVersion History.txt '^= (\d+\.\d+\.\d+) =$')
 }
 
 task markdown {
-	assert (Test-Path $env:MarkdownCss)
+	requires -Path $env:MarkdownCss
 	exec { pandoc.exe @(
 		'README.md'
 		'--output=README.htm'
@@ -73,7 +73,7 @@ task package markdown, {
 		'..\LICENSE'
 	)
 
-	Assert-SameFile -Text -View $env:MERGE -Result (Get-ChildItem $toModule -Force -Recurse -File -Name | Out-String) -Sample @'
+	Assert-SameFile -Text -View $env:MERGE -Result (Get-ChildItem $toModule -Force -Recurse -File -Name) -Sample @'
 ClearScript.Core.dll
 ClearScript.V8.dll
 ClearScript.V8.ICUData.dll
@@ -82,7 +82,6 @@ ClearScript.Windows.dll
 History.txt
 JavaScriptFar.deps.json
 JavaScriptFar.dll
-JavaScriptFar.runtimeconfig.json
 LICENSE
 Newtonsoft.Json.dll
 README.htm
@@ -118,7 +117,7 @@ task nuget package, version, {
 }
 
 task test {
-	Start-Far "ps: Test.far.ps1 * -Quit" $env:FarNetCode\$ModuleName\Tests -ReadOnly -Title JavaScriptFar\test
+	Start-Far "ps: ..\..\Test\Test-FarNet.ps1 * -Quit" .\Tests -ReadOnly
 }
 
 task . build, clean

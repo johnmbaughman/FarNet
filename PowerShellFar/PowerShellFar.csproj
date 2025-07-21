@@ -1,24 +1,25 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <FarHome Condition=" '$(FarHome)' == '' ">C:\Bin\Far\x64</FarHome>
-    <Description>PowerShell scripting for FarNet</Description>
-    <TargetFramework>net8.0</TargetFramework>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <WarningLevel>5</WarningLevel>
     <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <GenerateDocumentationFile>True</GenerateDocumentationFile>
-    <!--2024-11-10-0906-->
-    <NoWarn>NU1605</NoWarn>
+    <NoWarn>IDE0079;IDE0130;FarNet250103</NoWarn>
+    <CopyRetryCount>0</CopyRetryCount>
   </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="PowerShellFar.ps1" />
+  </ItemGroup>
   <ItemGroup>
     <Compile Remove="Bench\**" />
     <Compile Remove="Modules\**" />
-    <Compile Remove="Samples\**" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.PowerShell.SDK" Version="7.4.6" />
-    <!--2024-11-10-0906 or else it comes with problematic 9.*-->
-    <PackageReference Include="System.Drawing.Common" Version="8.0.10" />
+    <PackageReference Include="Microsoft.PowerShell.SDK" Version="7.5.2" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FarNet\FarNet\FarNet.csproj">

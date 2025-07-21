@@ -1,11 +1,7 @@
-
-// FarNet plugin for Far Manager
-// Copyright (c) Roman Kuzmin
-
 #pragma once
 
 namespace FarNet
-{;
+{
 // Far::Api instance.
 ref class Far1 sealed : IFar
 {

@@ -135,7 +135,7 @@ sealed partial class ModuleManager : IModuleManager
 		var config = Config.Default.GetData();
 		it.LoadConfig(config.GetModule(ModuleName));
 
-		Host.Instance.RegisterProxyCommand(it);
+		Far2.Api.RegisterProxyCommand(it);
 		return it;
 	}
 
@@ -152,7 +152,7 @@ sealed partial class ModuleManager : IModuleManager
 		var config = Config.Default.GetData();
 		it.LoadConfig(config.GetModule(ModuleName));
 
-		Host.Instance.RegisterProxyDrawer(it);
+		Far2.Api.RegisterProxyDrawer(it);
 		return it;
 	}
 
@@ -169,7 +169,7 @@ sealed partial class ModuleManager : IModuleManager
 		var config = Config.Default.GetData();
 		it.LoadConfig(config.GetModule(ModuleName));
 
-		Host.Instance.RegisterProxyTool(it);
+		Far2.Api.RegisterProxyTool(it);
 		return it;
 	}
 
@@ -220,13 +220,11 @@ sealed partial class ModuleManager : IModuleManager
 		var deps = Path.ChangeExtension(AssemblyPath, "deps.json");
 		if (File.Exists(deps))
 		{
-			Log.Source.TraceInformation("Module modern {0}", AssemblyPath);
 			var loadContext = new AssemblyLoadContext2(AssemblyPath);
 			_AssemblyInstance = loadContext.LoadFromAssemblyPath(AssemblyPath);
 		}
 		else
 		{
-			Log.Source.TraceInformation("Module simple {0}", AssemblyPath);
 			_AssemblyInstance = Assembly.LoadFrom(AssemblyPath);
 		}
 
@@ -358,7 +356,7 @@ sealed partial class ModuleManager : IModuleManager
 		SaveConfig(module);
 
 		// save action data
-		foreach (var action in Host.Actions.Values)
+		foreach (var action in Far2.Actions.Values)
 		{
 			if (action.Manager != this)
 				continue;

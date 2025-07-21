@@ -19,9 +19,10 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
+    <FarHome Condition="'$(FarHome)' == ''">C:\Bin\Far\$(Platform)</FarHome>
     <VCProjectVersion>16.0</VCProjectVersion>
     <ProjectGuid>{A5F07EDB-2242-4A92-BFD1-48396007C625}</ProjectGuid>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net9.0</TargetFramework>
     <RootNamespace>FarNetMan</RootNamespace>
     <Keyword>ManagedCProj</Keyword>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
@@ -94,7 +95,6 @@
       <MinimalRebuild>false</MinimalRebuild>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <PrecompiledHeader>Use</PrecompiledHeader>
-      <WarningLevel>Level4</WarningLevel>
       <TreatWarningAsError>true</TreatWarningAsError>
       <DisableSpecificWarnings>4679;4945;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <PreprocessorDefinitions>WIN32;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -121,7 +121,6 @@
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <StructMemberAlignment>Default</StructMemberAlignment>
       <PrecompiledHeader>Use</PrecompiledHeader>
-      <WarningLevel>Level4</WarningLevel>
       <TreatWarningAsError>true</TreatWarningAsError>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <DisableSpecificWarnings>4679;4945;%(DisableSpecificWarnings)</DisableSpecificWarnings>
@@ -149,7 +148,6 @@
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <StructMemberAlignment>Default</StructMemberAlignment>
       <PrecompiledHeader>Use</PrecompiledHeader>
-      <WarningLevel>Level4</WarningLevel>
       <TreatWarningAsError>true</TreatWarningAsError>
       <DisableSpecificWarnings>4679;4945;4068;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <EnablePREfast>false</EnablePREfast>
@@ -173,7 +171,6 @@
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <StructMemberAlignment>Default</StructMemberAlignment>
       <PrecompiledHeader>Use</PrecompiledHeader>
-      <WarningLevel>Level4</WarningLevel>
       <TreatWarningAsError>true</TreatWarningAsError>
       <DisableSpecificWarnings>4679;4945;4068;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <PreprocessorDefinitions>WIN32;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -213,6 +210,7 @@
     <ClCompile Include="Export.cpp" />
     <ClCompile Include="Far0.cpp" />
     <ClCompile Include="Far1.cpp" />
+    <ClCompile Include="Far2.cpp" />
     <ClCompile Include="History.cpp" />
     <ClCompile Include="InputBox.cpp" />
     <ClCompile Include="ListItemCollection.cpp" />
@@ -252,8 +250,7 @@
     <ClInclude Include="EditorLine.h" />
     <ClInclude Include="Far0.h" />
     <ClInclude Include="Far1.h" />
-    <ClInclude Include="Headers.c\farcolor.hpp" />
-    <ClInclude Include="Headers.c\farkeys.hpp" />
+    <ClInclude Include="Far2.h" />
     <ClInclude Include="History.h" />
     <ClInclude Include="InputBox.h" />
     <ClInclude Include="ListItemCollection.h" />
@@ -263,7 +260,6 @@
     <ClInclude Include="Panel1.h" />
     <ClInclude Include="Panel2.h" />
     <ClInclude Include="PanelFileCollection.h" />
-    <ClInclude Include="Headers.c\plugin.hpp" />
     <ClInclude Include="Settings.h" />
     <ClInclude Include="UI.h" />
     <ClInclude Include="Shelve.h" />
@@ -283,17 +279,12 @@
     <LocalDebuggerDebuggerType>Mixed</LocalDebuggerDebuggerType>
     <LocalDebuggerCommand>C:\Bin\Far\$(Platform)\Far.exe</LocalDebuggerCommand>
   </PropertyGroup>
-  <ItemGroup>
-    <None Include="FarNetMan.runtimeconfig.json" CopyToOutputDirectory="PreserveNewest">
-      <DeploymentContent>true</DeploymentContent>
-    </None>
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
   <ItemDefinitionGroup>
     <PostBuildEvent>
-      <Command>ib Install $(SolutionDir)\FarNet\FarNet.build.ps1 -Platform $(Platform) -Configuration $(Configuration)</Command>
+      <Command>pwsh -NoProfile -Command Invoke-Build install $(SolutionDir)\FarNet\FarNet.build.ps1 -Platform $(Platform) -FarHome $(FarHome) -Configuration $(Configuration)</Command>
     </PostBuildEvent>
     <ClCompile>
       <AdditionalOptions>/Wv:18 %(AdditionalOptions)</AdditionalOptions>

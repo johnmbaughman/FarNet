@@ -1,15 +1,10 @@
 
-// PowerShellFar module for Far Manager
-// Copyright (c) Roman Kuzmin
-
 using FarNet;
-using System;
 using System.Collections;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.IO;
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace PowerShellFar;
@@ -69,7 +64,7 @@ static class A
 
 			var asErrorRecord = Cast<ErrorRecord>.From(error);
 			if (asErrorRecord != null && asErrorRecord.InvocationInfo != null)
-				writer.WriteLine(Kit.PositionMessage(asErrorRecord.InvocationInfo.PositionMessage));
+				writer.WriteLine(asErrorRecord.InvocationInfo.PositionMessage.AsSpan().Trim());
 		}
 	}
 
@@ -84,7 +79,7 @@ static class A
 		writer.WriteLine(ex.Message);
 
 		if (ex is RuntimeException asRuntimeException && asRuntimeException.ErrorRecord != null && asRuntimeException.ErrorRecord.InvocationInfo != null)
-			writer.WriteLine(Kit.PositionMessage(asRuntimeException.ErrorRecord.InvocationInfo.PositionMessage));
+			writer.WriteLine(asRuntimeException.ErrorRecord.InvocationInfo.PositionMessage.AsSpan().Trim());
 	}
 
 	// Sets an item content, shows errors.
@@ -143,14 +138,14 @@ static class A
 
 	// Command for formatted output friendly for apps with interaction and colors.
 	// "Out-Host" is not suitable for apps with interaction, e.g. more.com, git.exe.
-	public static Command OutDefaultCommand => new("Out-Default")
+	public static Command OutDefaultCommand { get; } = new("Out-Default")
 	{
 		MergeUnclaimedPreviousCommandResults = PipelineResultTypes.Output | PipelineResultTypes.Error
 	};
 
 	// Command for formatted output of everything.
 	// "Out-Default" is not suitable for external apps, output goes to console.
-	public static Command OutHostCommand => new("Out-Host")
+	public static Command OutHostCommand { get; } = new("Out-Host")
 	{
 		MergeUnclaimedPreviousCommandResults = PipelineResultTypes.Output | PipelineResultTypes.Error
 	};
@@ -219,15 +214,11 @@ static class A
 	// Finds an available table control.
 	public static TableControl? FindTableControl(string typeName)
 	{
-		// make/try cache
-		if (_CacheTableControl is null)
-		{
-			_CacheTableControl = [];
-		}
-		else if (_CacheTableControl.TryGetValue(typeName, out TableControl? result))
-		{
+		_CacheTableControl ??= [];
+
+		ref TableControl? result = ref CollectionsMarshal.GetValueRefOrAddDefault(_CacheTableControl, typeName, out bool found);
+		if (found)
 			return result;
-		}
 
 		// extended type definitions:
 		foreach (var pso in InvokeCode("Get-FormatData -TypeName $args[0] -PowerShellVersion $PSVersionTable.PSVersion", typeName))
@@ -238,14 +229,13 @@ static class A
 				// if it's table, cache and return it
 				if (viewDef.Control is TableControl table)
 				{
-					_CacheTableControl.Add(typeName, table);
+					result = table;
 					return table;
 				}
 			}
 		}
 
-		// nothing, cache anyway and return null
-		_CacheTableControl.Add(typeName, null);
+		// nothing, cached anyway as null
 		return null;
 	}
 
@@ -258,7 +248,7 @@ static class A
 
 		try
 		{
-			return Psf.Engine.InvokeProvider.ChildItem.Get(new string[] { literalPath }, false, true, true);
+			return Psf.Engine.InvokeProvider.ChildItem.Get([literalPath], false, true, true);
 		}
 		catch (Exception ex)
 		{
@@ -398,9 +388,17 @@ Out-String -Width $args[1]
 	internal static void SetBreakpoint(string? script, int line, ScriptBlock? action)
 	{
 		string code = "Set-PSBreakpoint -Script $args[0] -Line $args[1]";
-		if (action != null)
+		if (action is { })
 			code += " -Action $args[2]";
-		InvokeCode(code, script, line, action);
+
+		try
+		{
+			InvokeCode(code, script, line, action);
+		}
+		catch (CmdletInvocationException ex) when (ex.InnerException is { } ex2)
+		{
+			throw ex2;
+		}
 	}
 
 	internal static void RemoveBreakpoint(object breakpoint)
@@ -413,16 +411,21 @@ Out-String -Width $args[1]
 		InvokeCode("Disable-PSBreakpoint -Breakpoint $args[0]", breakpoint);
 	}
 
-	internal static object SafePropertyValue(PSPropertyInfo pi)
+	internal static object? SafePropertyValue(PSPropertyInfo pi)
 	{
+		//: 2024-11-18-1917 CIM cmdlets problems, especially bad in PS 7.5
+		if (pi.Name == "CommandLine" && pi is PSScriptProperty scriptProperty && scriptProperty.GetterScript.ToString().Contains("Get-CimInstance"))
+			return null;
+
 		//! exceptions, e.g. exit code of running process
 		try
 		{
 			return pi.Value;
 		}
-		catch (GetValueException e)
+		catch (Exception ex)
 		{
-			return string.Format(null, "<ERROR: {0}>", e.Message);
+			Log.TraceException(ex);
+			return $"<ERROR: {ex.Message}>";
 		}
 	}
 
@@ -435,9 +438,10 @@ Out-String -Width $args[1]
 		{
 			return value.ToString()!;
 		}
-		catch (Exception e)
+		catch (Exception ex)
 		{
-			return string.Format(null, "<ERROR: {0}>", e.Message);
+			Log.TraceException(ex);
+			return $"<ERROR: {ex.Message}>";
 		}
 	}
 }

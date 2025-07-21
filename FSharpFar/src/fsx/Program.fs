@@ -14,8 +14,6 @@ do ()
 [<STAThread()>]
 [<LoaderOptimization(LoaderOptimization.MultiDomainHost)>]
 let main _ =
-    Environment.SetEnvironmentVariable("$Version", Environment.Version.ToString());
-
     // FARHOME may be missing if we start from cmd.
     let home = AppDomain.CurrentDomain.BaseDirectory
     let farHome = Path.GetFullPath(home + @"\..\..\..")
@@ -61,9 +59,8 @@ let main _ =
         for arg in iniArgs do
             let m = re.Match(arg)
             if m.Success then
-                let root = Path.GetFullPath(m.Groups[1].Value)
-                if roots.Add(root) then
-                    AssemblyResolver.prepare root
+                roots.Add(Path.GetFullPath(m.Groups[1].Value)) |> ignore
+        AssemblyResolver.init roots
 
     // add resolver
     AppDomain.CurrentDomain.add_AssemblyResolve(ResolveEventHandler(AssemblyResolver.assemblyResolve))

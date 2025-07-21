@@ -1,15 +1,8 @@
 
-// PowerShellFar module for Far Manager
-// Copyright (c) Roman Kuzmin
-
 using FarNet;
 using FarNet.Tools;
-using System;
-using System.IO;
-using System.Linq;
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
-using System.Threading.Tasks;
 
 namespace PowerShellFar;
 
@@ -22,7 +15,6 @@ class Interactive : InteractiveEditor
 	FarHost? FarHost;
 	Runspace? Runspace;
 	PowerShell? PowerShell;
-	bool _doneTabExpansion;
 	readonly bool _isNestedPrompt;
 
 	static readonly HistoryLog _history = new(Entry.LocalData + "\\InteractiveHistory.log", Settings.Default.MaximumHistoryCount);
@@ -208,17 +200,10 @@ class Interactive : InteractiveEditor
 			{
 				PowerShell.Stop();
 			}
-			catch
-			{ }
-		}
-	}
-
-	void InitTabExpansion()
-	{
-		if (!_doneTabExpansion)
-		{
-			_doneTabExpansion = true;
-			EditorKit.InitTabExpansion(Runspace);
+			catch (Exception ex)
+			{
+				Log.TraceException(ex);
+			}
 		}
 	}
 
@@ -243,7 +228,6 @@ class Interactive : InteractiveEditor
 					{
 						if (CommandArea() != null && EditorKit.NeedsTabExpansion(Editor))
 						{
-							InitTabExpansion();
 							EditorKit.ExpandCode(currentLine, Runspace);
 							Editor.Redraw();
 							return true;
@@ -284,7 +268,7 @@ class Interactive : InteractiveEditor
 		PowerShell = PowerShell.Create();
 		PowerShell.Runspace = Runspace;
 		PowerShell.Commands.AddScript(code).AddCommand(A.OutHostCommand);
-		Task.Run(() =>
+		_ = Task.Run(() =>
 		{
 			try
 			{

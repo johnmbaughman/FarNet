@@ -1,31 +1,25 @@
 ﻿using FarNet;
+using GitKit.About;
 using LibGit2Sharp;
-using System.Linq;
 using System;
-using System.Data.Common;
-using GitKit.Extras;
+using System.Linq;
 
 namespace GitKit.Commands;
 
-sealed class StatusCommand : BaseCommand
+sealed class StatusCommand(CommandParameters parameters) : BaseCommand(parameters)
 {
-	readonly bool _showFiles;
+	readonly bool _showFiles = parameters.GetBool("ShowFiles");
 
-	public StatusCommand(DbConnectionStringBuilder parameters) : base(parameters)
-	{
-		_showFiles = parameters.GetBool("ShowFiles");
-	}
-
-	void WriteChanges()
+	static void WriteChanges(Repository repo, bool showFiles)
 	{
 		// see TreeChanges.DebuggerDisplay
-		var changes = Lib.GetChanges(Repository);
+		var changes = Lib.GetChanges(repo);
 		if (changes.Count == 0)
 			return;
 
-		if (_showFiles)
+		if (showFiles)
 		{
-			Far.Api.UI.WriteLine($"Changes in {Repository.Info.WorkingDirectory}", ConsoleColor.White);
+			Far.Api.UI.WriteLine($"Changes in {repo.Info.WorkingDirectory}", ConsoleColor.White);
 			foreach (var change in changes)
 				Far.Api.UI.WriteLine($"  {change.Status}:\t{change.Path}");
 		}
@@ -62,11 +56,13 @@ sealed class StatusCommand : BaseCommand
 
 	public override void Invoke()
 	{
-		// tip is null: empty repository, fresh orphan branch ~ both "unborn"
-		Commit? tip = Repository.Head.Tip;
+		using var repo = new Repository(GitDir);
 
-		if (!Repository.Info.IsBare)
-			WriteChanges();
+		// tip is null: empty repository, fresh orphan branch ~ both "unborn"
+		Commit? tip = repo.Head.Tip;
+
+		if (!repo.Info.IsBare)
+			WriteChanges(repo, _showFiles);
 
 		var settings = Settings.Default.GetData();
 		if (tip is not null)
@@ -80,13 +76,13 @@ sealed class StatusCommand : BaseCommand
 
 		if (tip is null)
 		{
-			Far.Api.UI.Write(Repository.Head.FriendlyName);
-			if (Repository.Info.IsHeadUnborn)
+			Far.Api.UI.Write(repo.Head.FriendlyName);
+			if (repo.Info.IsHeadUnborn)
 				Far.Api.UI.Write(" (unborn)");
 		}
 		else
 		{
-			var tracking = Repository.Head.TrackingDetails;
+			var tracking = repo.Head.TrackingDetails;
 			if (tracking is not null)
 			{
 				if (tracking.AheadBy > 0)
@@ -96,7 +92,7 @@ sealed class StatusCommand : BaseCommand
 					Far.Api.UI.Write($"-{tracking.BehindBy} ", ConsoleColor.Red);
 			}
 
-			var branches = Repository.Branches
+			var branches = repo.Branches
 				.Where(x => x.Tip == tip)
 				.OrderBy(x => x.IsCurrentRepositoryHead ? 0 : 1)
 				.ThenBy(x => x.IsRemote ? 1 : 0)

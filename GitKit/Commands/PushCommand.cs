@@ -1,19 +1,16 @@
 ﻿using FarNet;
-using GitKit.Extras;
+using GitKit.About;
 using LibGit2Sharp;
-using System.Data.Common;
 
 namespace GitKit.Commands;
 
-sealed class PushCommand : BaseCommand
+sealed class PushCommand(CommandParameters parameters) : BaseCommand(parameters)
 {
-	public PushCommand(DbConnectionStringBuilder parameters) : base(parameters)
-	{
-	}
-
 	public override void Invoke()
 	{
-		PushBranch(Repository, Repository.Head);
+		using var repo = new Repository(GitDir);
+
+		PushBranch(repo, repo.Head);
 	}
 
 	public static void PushBranch(Repository repo, Branch branch)

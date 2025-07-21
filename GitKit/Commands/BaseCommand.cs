@@ -1,41 +1,26 @@
 ﻿using FarNet;
-using GitKit.Extras;
+using GitKit.About;
 using LibGit2Sharp;
-using System;
-using System.Data.Common;
-using System.IO;
 
 namespace GitKit.Commands;
 
-abstract class BaseCommand : AnyCommand
+abstract class BaseCommand : AbcCommand
 {
-	protected RepositoryReference Reference { get; }
-	protected Repository Repository { get; }
+	protected string GitDir { get; }
 
-	protected BaseCommand(DbConnectionStringBuilder parameters)
+	protected BaseCommand(CommandParameters parameters)
 	{
-		Reference = RepositoryReference.GetReference(Host.GetFullPath(parameters.GetString(Parameter.Repo, true)));
-		Repository = Reference.Instance;
+		try { GitDir = Lib.GetGitDir(parameters.GetPathOrCurrentDirectory(Param.Repo)); }
+		catch (Exception ex) { throw parameters.ParameterError(Param.Repo, ex.Message); }
 	}
 
-	protected BaseCommand(string path)
-	{
-		Reference = RepositoryReference.GetReference(path);
-		Repository = Reference.Instance;
-	}
-
-	protected override void Dispose(bool disposing)
-	{
-		Reference.Dispose();
-	}
-
-	protected string? GetGitPathOrPath(
-		DbConnectionStringBuilder parameters,
+	protected static string? GetGitPathOrPath(
+		Repository repo,
+		string? path,
+		bool isGitPath,
 		Func<string?, string?> validate,
 		bool returnNullIfRoot = false)
 	{
-		var path = parameters.GetString(Parameter.Path, true);
-		var isGitPath = parameters.GetBool(Parameter.IsGitPath);
 		if (isGitPath)
 			return path;
 
@@ -43,14 +28,10 @@ abstract class BaseCommand : AnyCommand
 		if (path is null)
 			return null;
 
-		if (!Path.IsPathRooted(path))
-			path = Path.Combine(Far.Api.CurrentDirectory, path);
-
-		// normalize
-		path = Path.GetFullPath(path);
+		path = Far.Api.GetFullPath(path);
 
 		//! LibGit2 gets it with trailing backslash
-		var workdir = Repository.Info.WorkingDirectory;
+		var workdir = repo.Info.WorkingDirectory;
 
 		if (path.StartsWith(workdir, StringComparison.OrdinalIgnoreCase))
 		{

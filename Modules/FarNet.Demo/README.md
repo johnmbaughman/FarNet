@@ -2,13 +2,13 @@
 
 ## Main features
 
-This modules demonstrates some FarNet module features:
+This module implements and shows some features:
 
+- Module command [DemoCommand.cs](DemoCommand.cs) for commands using the prefix.
+- Module tool [DemoTool.cs](DemoTool.cs) for menu items in the plugin menu.
 - Module host [DemoHost.cs](DemoHost.cs) called on every module load.
-- Module command [DemoCommand.cs](DemoCommand.cs) for commands with prefixes.
-- Module tool [DemoTool.cs](DemoTool.cs) for menu items in the Far plugin menu.
-- Explorer [DemoExplorer.cs] for module panels.
-- Localisation using .restext files.
+- Explorer [DemoExplorer.cs](DemoExplorer.cs) for module panels.
+- Localisation, .restext files compiled to .resources.
 - Settings using XML files.
 - Module help files.
 
@@ -16,9 +16,9 @@ This modules demonstrates some FarNet module features:
 
 FarNet modules, like FarNet scripts, may have methods for calls by the command `fn:`.
 
-Example: [DemoMethods.cs](DemoMethods.cs) method `Message` may be called as:
+Example: [Script.cs](Script.cs) method `Message` may be called as:
 
-    fn: module=FarNet.Demo; method=FarNet.Demo.DemoMethods.Message :: name=John Doe; age=42
+    fn: module=FarNet.Demo; method=Message ;; name=John Doe; age=42
 
 ## Module settings
 

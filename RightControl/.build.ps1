@@ -17,21 +17,12 @@ task build meta, {
 	exec { dotnet build -c $Configuration /p:FarHome=$FarHome }
 }
 
-task publish {
-	$null = mkdir $ModuleRoot -Force
-	Copy-Item -Destination $ModuleRoot @(
-		"bin\$Configuration\net8.0\$ModuleName.dll"
-		"bin\$Configuration\net8.0\$ModuleName.pdb"
-	)
-}
-
 task clean {
 	remove z, bin, obj, README.htm, FarNet.$ModuleName.*.nupkg
 }
 
 task version {
-	($script:Version = switch -Regex -File History.txt {'=\s*(\d+\.\d+\.\d+)\s*=' {$Matches[1]; break}})
-	assert $script:Version
+	($Script:Version = Get-BuildVersion History.txt '^= (\d+\.\d+\.\d+) =$')
 }
 
 task meta -Inputs .build.ps1, History.txt -Outputs Directory.Build.props -Jobs version, {

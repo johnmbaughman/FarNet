@@ -1,9 +1,9 @@
 <#
 .Synopsis
-	Help script (https://github.com/nightroman/Helps)
+	Help script, https://github.com/nightroman/Helps
 #>
 
-Set-StrictMode -Version Latest
+Set-StrictMode -Version 3
 
 ### Assert-Far
 @{
@@ -244,37 +244,6 @@ otherwise nothing is returned, it is used simply to display a message.
 The selected button index or -1 on escape, or none if the message box has no
 choice buttons and just shows a message.
 '@
-	}
-}
-
-### Start-FarJob
-@{
-	command = 'Start-FarJob'
-	synopsis = 'Starts a new background job (not native PowerShell job).'
-	description = @'
-It starts a new background job with the specified arguments or parameters.
-
-Far jobs run in separated workspaces in the same process. They take live input
-objects and may return live output. (Compare with PowerShell jobs: they run in
-separate processes and deal with serialized input and output.)
-'@
-	parameters = @{
-		Command = 'A command name or a script block.'
-		Parameters = 'Command parameters. IDictionary for named parameters, IList for arguments, or a single argument.'
-		Name = 'Job friendly name to display.'
-		Output = 'Tells to start and return the job with exposed Output. Dispose() has to called when the job is done.'
-		Return = 'Returns not yet started job with exposed Output. StartJob() and Dispose() are called explicitly.'
-		Hidden = 'Started job is not returned, not shown in the list, output is discarded and succeeded job is disposed.',
-		'If the job fails or finishes with errors it is included in the list so that errors can be investigated.',
-		'For a hidden job parameters Output, Return, and KeepSeconds are ignored.'
-		KeepSeconds = 'Tells to keep succeeded job only for specified number of seconds.',
-		'Set 0 to remove the succeeded job immediately.',
-		'Jobs with errors are not removed automatically, you should remove them from the list.',
-		'Stopwatch is started when the first job notification is shown in the console title.'
-	}
-	outputs = @{
-		type = 'PowerShellFar.Job'
-		description = 'A new not yet started job if the Return switch is used, otherwise nothing is returned.'
 	}
 }
 
@@ -597,81 +566,106 @@ Example: 'FullName' or {$_.FullName} tell to use a property FullName.
 	command = 'Start-FarTask'
 	synopsis = 'Starts the script task.'
 	description = @'
-	This cmdlet starts the specified script task. File script parameters are
-	defined in the script and specified for Start-FarTask as its own. Known
-	issue: switch parameters must be specified after Script.
+	This cmdlet starts the script task. The script runs in a new session
+	asynchronously without blocking the main thread. It uses special job
+	blocks for accessing FarNet API in the main session.
 
-	If the script is a script block or code then parameters are not supported.
-	Use the parameter Data in order to import specified variables to the task
-	automatic hashtable $Data.
+	INPUT
 
-	The script is invoked in a new runspace asynchronously without blocking the
-	main thread. The code must not work with FarNet directly, it should use job
-	blocks instead. Jobs are invoked in the main session.
+	The task script and jobs may use the shared hashtable $Data. It is set
+	explicitly by the parameter Data and implicitly by script parameters.
 
-	The task and jobs may exchange data using the automatic hashtable $Data.
+	If Script uses parameters, they may be specified on Start-FarTask calls.
+	Known issue: avoid switch parameters or specify after parameter Script.
+	The specified parameters are also added to the shared hashtable $Data.
 
-	The cmdlet returns nothing by default and the script output is ignored. Use
-	the switch AsTask in order to return the started task. Use it in a calling
-	async scenario and get the script output as the task result, object[].
+	OUTPUT
+
+	The cmdlet returns nothing by default and the task script output is
+	ignored. Use the switch AsTask in order to return the started task.
+	The task result is the task script output presented as [object[]].
+
+	LOCATION
+
+	The task current location is the caller file system current location.
+	The task may change it, this does not affect anything else.
+
+	Task jobs current locations are the main session current location.
+	Jobs should not change it without restoring the original.
 
 	JOBS AND MACROS
 
-	job [-Arguments ...] [-Script] {...}
+	job {...}
 
-		This job works with FarNet and may output data as usual. Special case:
-		if the output is a task then this task is awaited and its result is
-		returned instead.
+		This job may output data as usual. Special case: if the output is a
+		task then this task is awaited and its result is returned instead.
 
-	ps: [-Arguments ...] [-Script] {...}
+		Use $Var.<name> for getting or setting the task variables.
 
-		This job is used for console output as if its commands are invoked from
-		the command line. It returns nothing because the output is sent to the
-		console.
+	run {...}
 
-	run [-Arguments ...] [-Script] {...}
+		This job starts some modal UI as the last command and immediately
+		returns to the task with modal UI still running. Output is ignored.
 
-		This job is used to run modal UI without blocking the task.
-		It is useful for automation and tests. Output is ignored.
+		Use $Var.<name> for getting or setting the task variables.
 
-	keys <keys> [<keys> [...]]
+	ps: {...}
+
+		This job prints its commands output to the console.
+
+		Use $Var.<name> for getting or setting the task variables.
+
+	keys <key> [<key> ...]
 
 		This command invokes the specified keys.
-		Arguments are concatenated with spaces.
 
 	macro <code>
 
 		This command invokes the specified macro.
+
+	DEBUGGING AND STEPPING
+
+	AddDebugger and Step enable debugging and require Add-Debugger.ps1 in the path.
+	Get Add-Debugger.ps1 -- https://www.powershellgallery.com/packages/Add-Debugger
 '@
 	parameters = @{
-		Script = 'Specifies the task as script file, block, or code.'
-		AsTask = 'Tells to return the started task.'
+		Script = @'
+		Specifies the task as script block or file name or script code.
+
+		File names are full or relative paths or just names in the path.
+		File names should end with ".ps1".
+
+		Strings not ending with ".ps1" are treated as code and compiled to
+		script blocks.
+'@
+		AsTask = @'
+		Tells to return the started task.
+		The task result is the task script output presented as [object[]].
+'@
 		Data = @'
-The list of variable names or hashtables exposed as the task variable $Data.
+		The list of variable names or hashtables added to the shared hashtable $Data.
 
-If an item is variable name then it is added to $Data as {name, value}.
-The variable must exist and its name must be unique as $Data key.
+		String items are names of existing variables added to $Data.
 
-If an item is hashtable then its entries are merged into $Data overriding
-existing with same names.
+		Other items are hashtables merged into $Data.
 '@
 		AddDebugger = @'
-Tells to use Add-Debugger.ps1 and specifies its parameters as dictionary.
-The parameter Path is required. Example:
+		Tells to use Add-Debugger.ps1 and specifies its parameters hashtable.
+		Use null or empty hashtable for defaults.
+		Example:
 
-	Start-FarTask ... -AddDebugger @{
-		Path = "$env:TEMP\debug.log"
-		Environment = 'AddDebugger'
-		Context = 10
-	}
+			Start-FarTask ... -AddDebugger @{
+				Path = "$env:TEMP\debug-1.log"
+				Context = 10
+			}
 
-Use Step in addition or set some breakpoints.
-Otherwise, the debugger is not going to stop.
-
-Get Add-Debugger.ps1 from PSGallery -- https://www.powershellgallery.com/packages/Add-Debugger
+		Ensure some breakpoints in the task script or use Wait-Debugger or
+		use Step to break at jobs and macros. Otherwise, the debugger will
+		not stop.
 '@
 		Step = @'
-Tells to set breakpoints for stopping at each step: `job`, `ps:`, `run`, `keys`, `macro`.
+		Tells to use Add-Debugger.ps1 and sets breakpoints at jobs and macros:
+		`job`, `run`, `ps:`, `keys`, `macro`.
 '@
 	}
 
@@ -681,7 +675,7 @@ Tells to set breakpoints for stopping at each step: `job`, `ps:`, `run`, `keys`,
 	}
 
 	links = @(
-		@{ text = 'Samples -- https://github.com/nightroman/FarNet/tree/main/PowerShellFar/Samples/FarTask' }
+		@{ text = 'Samples -- https://github.com/nightroman/FarNet/tree/main/Samples/FarTask' }
 	)
 }
 
@@ -708,7 +702,7 @@ Merge-Helps $BaseRegister @{
 '@
 	}
 	links = @(
-		@{ text = 'https://github.com/nightroman/FarNet/blob/main/PowerShellFar/Samples/Tests/Test-RegisterCommand.far.ps1' }
+		@{ text = 'https://github.com/nightroman/FarNet/blob/main/Samples/Tests/Test-RegisterCommand.far.ps1' }
 	)
 }
 
@@ -737,7 +731,7 @@ Merge-Helps $BaseRegister @{
 '@
 	}
 	links = @(
-		@{ text = 'https://github.com/nightroman/FarNet/blob/main/PowerShellFar/Samples/Tests/Test-RegisterDrawer.far.ps1' }
+		@{ text = 'https://github.com/nightroman/FarNet/blob/main/Samples/Tests/Test-RegisterDrawer.far.ps1' }
 	)
 }
 
@@ -757,6 +751,6 @@ Merge-Helps $BaseRegister @{
 '@
 	}
 	links = @(
-		@{ text = 'https://github.com/nightroman/FarNet/blob/main/PowerShellFar/Samples/Tests/Test-RegisterTool.far.ps1' }
+		@{ text = 'https://github.com/nightroman/FarNet/blob/main/Samples/Tests/Test-RegisterTool.far.ps1' }
 	)
 }

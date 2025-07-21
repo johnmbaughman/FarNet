@@ -1,6 +1,5 @@
-﻿using System;
+﻿
 using System.Collections;
-using System.Collections.Generic;
 using System.Reflection;
 
 namespace FarNet.Tools;
@@ -73,9 +72,9 @@ class XPathObjectNodeAny : XPathObjectNode
 		var attrType = new ValueGetter("type", _ => _type is null ? _tag.GetType().Name : _type.Name);
 
 		if (string.IsNullOrEmpty(_key))
-			return new ValueGetter[] { attrType };
+			return [attrType];
 
-		return new ValueGetter[] { new("name", it => _key), attrType };
+		return [new("name", it => _key), attrType];
 	}
 
 	protected override IList<XPathObjectNode> GetElements()
@@ -175,8 +174,9 @@ class XPathObjectNodeAny : XPathObjectNode
 			{
 				value = info.GetValue(_tag, null);
 			}
-			catch
+			catch (Exception ex)
 			{
+				Log.TraceException(ex);
 				value = null;
 			}
 

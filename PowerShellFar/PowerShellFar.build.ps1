@@ -10,7 +10,7 @@ param(
 
 Set-StrictMode -Version 3
 $ModuleName = "PowerShellFar"
-$ModuleHome = "$FarHome\FarNet\Modules\$ModuleName"
+$ModuleRoot = "$FarHome\FarNet\Modules\$ModuleName"
 
 task clean {
 	remove z, bin, obj, About-PowerShellFar.htm
@@ -20,16 +20,16 @@ task clean {
 task publish installBin, installRes
 
 task uninstall {
-	if (Test-Path $ModuleHome) { Remove-Item $ModuleHome -Recurse -Force }
+	if (Test-Path $ModuleRoot) { Remove-Item $ModuleRoot -Recurse -Force }
 }
 
 task markdown {
 	# HLF
 	exec { pandoc.exe README.md --output=About-PowerShellFar.htm --from=gfm --no-highlight }
-	exec { HtmlToFarHelp from=About-PowerShellFar.htm to=$ModuleHome\PowerShellFar.hlf }
+	exec { HtmlToFarHelp from=About-PowerShellFar.htm to=$ModuleRoot\PowerShellFar.hlf }
 
 	# HTM
-	assert (Test-Path $env:MarkdownCss)
+	requires -Path $env:MarkdownCss
 	exec {
 		pandoc.exe @(
 			'README.md'
@@ -44,29 +44,27 @@ task markdown {
 }
 
 task installBin {
-	exec { dotnet publish "$ModuleName.csproj" -c $Configuration -o $ModuleHome --no-build }
-	Remove-Item "$ModuleHome\PowerShellFar.deps.json"
+	exec { dotnet publish "$ModuleName.csproj" -c $Configuration -o $ModuleRoot --no-build }
 
 	# move `ref` folder to "expected" location or cannot compile C# in PS
-	# ~ cannot find '...\PowerShellFar\runtimes\win\lib\net7.0\ref'.
-	exec { robocopy "$ModuleHome\ref" "$ModuleHome\runtimes\win\lib\net8.0\ref" /s } (0..2)
-	Remove-Item -LiteralPath "$ModuleHome\ref" -Force -Recurse
-
-	# prune resources, to keep our dll cache cleaner
-	Set-Location $ModuleHome
-	remove cs, de, es, fr, it, ja, ko, pl, pt-BR, ru, tr, zh-Hans, zh-Hant
+	remove "$ModuleRoot\runtimes\win\lib\net9.0\ref"
+	Move-Item "$ModuleRoot\ref" "$ModuleRoot\runtimes\win\lib\net9.0\ref"
 
 	# unused
-	Set-Location runtimes
-	remove freebsd, illumos, ios, linux*, osx*, solaris, tvos, unix, win-arm*
+	Set-Location "$ModuleRoot\runtimes"
+	remove android*, freebsd, illumos, ios, linux*, maccatalyst*, osx*, solaris, tvos, unix, win-arm*
+
+	# 2024-11-18-1917 remove CIM, avoid bad issues
+	Set-Location "$ModuleRoot\runtimes\win\lib\net9.0"
+	remove Modules\CimCmdlets, Microsoft.Management.Infrastructure.CimCmdlets.dll
 }
 
 task installRes {
-	exec { robocopy . $ModuleHome PowerShellFar.ps1 TabExpansion2.ps1 } (0..2)
+	Copy-Item -Destination $ModuleRoot TabExpansion2.ps1
 }
 
 # Build PowerShell help if FarHost else Write-Warning.
-task help -Inputs {Get-Item Commands\*} -Outputs "$ModuleHome\PowerShellFar.dll-Help.xml" {
+task help -Inputs {Get-Item Commands\*} -Outputs "$ModuleRoot\PowerShellFar.dll-Help.xml" {
 	if ($Host.Name -eq 'FarHost') {
 		. Helps.ps1
 		Convert-Helps "$BuildRoot\Commands\PowerShellFar.dll-Help.ps1" "$Outputs"
@@ -84,7 +82,7 @@ task package markdown, {
 	$toModule = mkdir 'z\tools\FarHome\FarNet\Modules\PowerShellFar'
 
 	# module
-	exec { robocopy $ModuleHome $toModule /s /xf *.pdb } (0..2)
+	exec { robocopy $ModuleRoot $toModule /s /xf *.pdb } (0..2)
 
 	# logo
 	Copy-Item -Destination z ..\Zoo\FarNetLogo.png

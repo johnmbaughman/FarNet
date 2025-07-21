@@ -1,7 +1,4 @@
 
-// FarNet plugin for Far Manager
-// Copyright (c) Roman Kuzmin
-
 #include "stdafx.h"
 #include "Dialog.h"
 #include "DialogControls.h"
@@ -33,6 +30,7 @@ DEF_PROP_FLAG(FarDialog, IsWarning, FDLG_WARNING);
 DEF_PROP_FLAG(FarDialog, KeepWindowTitle, FDLG_KEEPCONSOLETITLE);
 DEF_PROP_FLAG(FarDialog, NoPanel, FDLG_NODRAWPANEL);
 DEF_PROP_FLAG(FarDialog, NoShadow, FDLG_NODRAWSHADOW);
+DEF_PROP_FLAG(FarDialog, StayOnTop, FDLG_STAY_ON_TOP);
 
 // Native dialog wrapper
 FarDialog::FarDialog(HANDLE hDlg)
@@ -586,6 +584,12 @@ INT_PTR FarDialog::DialogProc(intptr_t msg, intptr_t param1, void* param2)
 				_Initialized(this, % ea);
 			}
 
+			// after Initialized, it may be set there
+			if (_EnableInputEvents)
+			{
+				Info.SendDlgMessage(_hDlg, DM_SETINPUTNOTIFY, 1, 0);
+			}
+
 			// start timer //_210630_i0
 			if (_TimerInterval > 0)
 				_timerInstance = gcnew System::Threading::Timer(gcnew TimerCallback(this, &FarDialog::OnTimer), this, _TimerInterval, _TimerInterval);
@@ -798,6 +802,32 @@ INT_PTR FarDialog::DialogProc(intptr_t msg, intptr_t param1, void* param2)
 					return !ea.Ignore;
 				}
 				break;
+			}
+			break;
+		}
+		case DN_INPUT: //rk-0
+		{
+			INPUT_RECORD* ir = (INPUT_RECORD*)param2;
+
+			if (MOUSE_EVENT == ir->EventType)
+			{
+				if (_MouseClicking)
+				{
+					MouseClickedEventArgs ea(nullptr, GetMouseInfo(ir->Event.MouseEvent));
+					_MouseClicking(this, % ea);
+					if (ea.Ignore)
+						return true;
+				}
+			}
+			else if (KEY_EVENT == ir->EventType)
+			{
+				if (_KeyPressing)
+				{
+					KeyPressedEventArgs ea(nullptr, KeyInfoFromInputRecord(*ir));
+					_KeyPressing(this, % ea);
+					if (ea.Ignore)
+						return true;
+				}
 			}
 			break;
 		}

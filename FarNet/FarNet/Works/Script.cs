@@ -1,13 +1,7 @@
-﻿// FarNet plugin for Far Manager
-// Copyright (c) Roman Kuzmin
-
+﻿
 using FarNet.Tools;
-using System;
-using System.Collections.Generic;
 using System.ComponentModel;
-using System.Linq;
 using System.Reflection;
-using System.Threading.Tasks;
 
 namespace FarNet.Works;
 #pragma warning disable 1591
@@ -24,8 +18,8 @@ public static class Script
 
 	class ScriptParameters
 	{
-		public string ModuleName = null!;
-		public string ScriptName = null!;
+		public string? ModuleName;
+		public string? ScriptName;
 		public string TypeName = null!;
 		public string MethodName = null!;
 		public bool Unload;
@@ -33,7 +27,7 @@ public static class Script
 
 	public static void InvokeCommand()
 	{
-		Task.Run(async () =>
+		_ = Task.Run(async () =>
 		{
 			var ui = new InputBox("Command", "FarNet command");
 			ui.Edit.History = "FarNet command";
@@ -58,77 +52,63 @@ public static class Script
 		});
 	}
 
-	static ScriptParameters ParseScriptParameters(string text)
+	static ScriptParameters ParseScriptParameters(in CommandParameters parameters)
 	{
-		var sb = Kit.ParseParameters(text);
-		var res = new ScriptParameters();
-
-		// script
-		if (sb.TryGetValue(KeyScript, out object? script))
+		// script and module
+		var res = new ScriptParameters
 		{
-			res.ScriptName = script.ToString()!;
-			sb.Remove(KeyScript);
-		}
+			ScriptName = parameters.GetString(KeyScript),
+			ModuleName = parameters.GetString(KeyModule)
+		};
 
-		// module
-		if (sb.TryGetValue(KeyModule, out object? module))
-		{
-			res.ModuleName = module.ToString()!;
-			sb.Remove(KeyModule);
-		}
+		if (res.ScriptName is null && res.ModuleName is null)
+			throw new ModuleException($"Missing required parameter '{KeyScript}' or '{KeyModule}'.");
 
-		if (script is null && module is null)
-			throw new InvalidOperationException("Missing required parameter 'script' or 'module'.");
-
-		if (script != null && module != null)
-			throw new InvalidOperationException("Parameters 'script' and 'module' cannot be used together.");
+		if (res.ScriptName is { } && res.ModuleName is { })
+			throw new ModuleException($"Parameters '{KeyScript}' and '{KeyModule}' cannot be used together.");
 
 		// method
-		if (sb.TryGetValue(KeyMethod, out object? method))
+		var method = parameters.GetRequiredString(KeyMethod);
 		{
-			var name = method.ToString()!;
-			int index = name.LastIndexOf('.');
+			int index = method.LastIndexOf('.');
 			if (index < 0)
-				throw new InvalidOperationException("Invalid method name.");
+			{
+				// no-dot shortcut, use script/module name + "Script" as type
+				res.TypeName = (res.ScriptName ?? res.ModuleName) + ".Script";
+				res.MethodName = method;
+			}
+			else
+			{
+				res.TypeName = method[..index];
+				res.MethodName = method[(index + 1)..];
 
-			res.TypeName = name[..index];
-			res.MethodName = name[(index + 1)..];
-			sb.Remove(KeyMethod);
-
-			// if type name is like .* then use script/module name as namespace
-			if (res.TypeName.StartsWith('.'))
-				res.TypeName = (res.ScriptName ?? res.ModuleName) + res.TypeName;
-		}
-		else
-		{
-			throw new InvalidOperationException("Missing required parameter 'method'.");
+				// dot shortcut, use script/module name as namespace
+				if (res.TypeName.StartsWith('.'))
+					res.TypeName = (res.ScriptName ?? res.ModuleName) + res.TypeName;
+			}
 		}
 
 		// unload
-		if (sb.TryGetValue(KeyUnload, out object? unload))
-		{
-			res.Unload = bool.Parse(unload.ToString()!);
-			sb.Remove(KeyUnload);
-		}
+		res.Unload = parameters.GetBool(KeyUnload);
 
-		if (sb.Count > 0)
-			throw new InvalidOperationException($"Unknown script parameters: {sb}");
+		// assert
+		parameters.ThrowUnknownParameters();
 
 		return res;
 	}
 
-	static object?[]? ParseMethodParameters(MethodInfo method, string? text)
+	static object?[]? ParseMethodParameters(MethodInfo method, ReadOnlySpan<char> text)
 	{
 		var methodParameters = method.GetParameters();
 		if (methodParameters.Length == 0)
 		{
-			if (text != null)
+			if (text.Length > 0)
 				throw new InvalidOperationException("Method does not have parameters.");
 
 			return null;
 		}
 
-		var sb = text is null ? null : Kit.ParseParameters(text);
+		var sb = text.Length == 0 ? null : CommandParameters.ParseParameters(text.ToString());
 
 		var res = new object?[methodParameters.Length];
 		for (int i = 0; i < res.Length; i++)
@@ -168,20 +148,21 @@ public static class Script
 	static (Assembly, AssemblyLoadContext2?) LoadAssembly(ScriptParameters scriptParameters)
 	{
 		// load the module
-		if (scriptParameters.ScriptName is null)
+		if (scriptParameters.ModuleName is { })
 		{
 			var manager = Far.Api.GetModuleManager(scriptParameters.ModuleName);
 			return (manager.LoadAssembly(true), null);
 		}
 
 		// use permanently loaded script
-		if (!scriptParameters.Unload && s_scripts.TryGetValue(scriptParameters.ScriptName, out Assembly? loadedAssembly))
+		string scriptName = scriptParameters.ScriptName!;
+		if (!scriptParameters.Unload && s_scripts.TryGetValue(scriptName, out Assembly? loadedAssembly))
 		{
 			return (loadedAssembly, null);
 		}
 
 		// load the script assembly
-		var dll = $"{Environment.GetEnvironmentVariable("FARHOME")}\\FarNet\\Scripts\\{scriptParameters.ScriptName}\\{scriptParameters.ScriptName}.dll";
+		var dll = $"{Environment.GetEnvironmentVariable("FARHOME")}\\FarNet\\Scripts\\{scriptName}\\{scriptName}.dll";
 		var loader = new AssemblyLoadContext2(dll, scriptParameters.Unload);
 		var assembly = loader.LoadFromAssemblyPath(dll);
 		if (scriptParameters.Unload)
@@ -192,30 +173,16 @@ public static class Script
 		else
 		{
 			// keep permanently loaded
-			s_scripts.Add(scriptParameters.ScriptName, assembly);
+			s_scripts.Add(scriptName, assembly);
 			return (assembly, null);
 		}
 	}
 
 	public static void InvokeScript(string command)
 	{
-		// get script and method parts of the command
-		string scriptParametersText;
-		string? methodParametersText;
-		var index = command.IndexOf("::");
-		if (index < 0)
-		{
-			scriptParametersText = command;
-			methodParametersText = null;
-		}
-		else
-		{
-			scriptParametersText = command[..index];
-			methodParametersText = command[(index + 2)..];
-		}
-
-		// get script parameters
-		var scriptParameters = ParseScriptParameters(scriptParametersText);
+		// get script parameters with separated text
+		var parameters = CommandParameters.Parse(command, false);
+		var scriptParameters = ParseScriptParameters(parameters);
 
 		// load assembly
 		var (assembly, loader) = LoadAssembly(scriptParameters);
@@ -226,7 +193,7 @@ public static class Script
 			if (loader != null)
 			{
 				loader.Unload();
-				Task.Run(() =>
+				_ = Task.Run(() =>
 				{
 					var weakRef = new WeakReference(loader, true);
 					for (int i = 0; weakRef.IsAlive && i < 10; i++)
@@ -250,7 +217,9 @@ public static class Script
 				?? throw new Exception($"Cannot find method '{scriptParameters.MethodName}'.");
 
 			// parse method parameters
-			var methodParameters = ParseMethodParameters(method, methodParametersText);
+			var methodParameters = ParseMethodParameters(
+				method,
+				parameters.Text2.Length == 0 ? parameters.Text : parameters.Text.ToString() + ';' + parameters.Text2.ToString());
 
 			// done with parsing, create an instance
 			object? instance;
@@ -277,7 +246,7 @@ public static class Script
 				if (res is Task task)
 				{
 					doFinallyComplete = false;
-					Task.Run(async () =>
+					_ = Task.Run(async () =>
 					{
 						try
 						{

@@ -1,9 +1,5 @@
 ﻿
-// PowerShellFar module for Far Manager
-// Copyright (c) Roman Kuzmin
-
 using FarNet;
-using System;
 using System.Management.Automation;
 
 namespace PowerShellFar;
@@ -17,9 +13,12 @@ public sealed class Entry : ModuleHost
 {
 	internal static Entry Instance { get; private set; } = null!;
 	internal static string LocalData { get; private set; } = null!;
-	internal static string RoamingData { get; private set; } = null!; 
-	internal static IModuleCommand CommandInvoke1 { get; private set; } = null!; 
+	internal static string RoamingData { get; private set; } = null!;
+	internal static IModuleCommand CommandInvoke1 { get; private set; } = null!;
 	internal static IModuleCommand CommandInvoke2 { get; private set; } = null!;
+
+	internal static string Prefix1 { get; private set; } = null!;
+	internal static string Prefix2 { get; private set; } = null!;
 
 	public Entry()
 	{
@@ -56,6 +55,10 @@ public sealed class Entry : ModuleHost
 			new ModuleToolAttribute { Name = Res.Me, Options = ModuleToolOptions.F11Menus, Id = "7def4106-570a-41ab-8ecb-40605339e6f7" },
 			(s, e) => UI.ActorMenu.Show(e));
 
+		// prefixes
+		Prefix1 = CommandInvoke1.Prefix + ':';
+		Prefix2 = CommandInvoke2.Prefix + ':';
+
 		// subscribe to editors
 		Far.Api.AnyEditor.FirstOpening += EditorKit.OnEditorFirstOpening;
 		Far.Api.AnyEditor.Opened += EditorKit.OnEditorOpened;
@@ -72,11 +75,6 @@ public sealed class Entry : ModuleHost
 		Instance = null!;
 	}
 
-	public override bool CanExit()
-	{
-		return A.Psf.CanExit();
-	}
-
 	public override void Invoking()
 	{
 		if (!IsInvokingCalled)
@@ -87,23 +85,35 @@ public sealed class Entry : ModuleHost
 	}
 	bool IsInvokingCalled;
 
+	internal static bool IsMyPrefix(ReadOnlySpan<char> prefix)
+	{
+		return
+			prefix.Equals(CommandInvoke1.Prefix, StringComparison.OrdinalIgnoreCase) ||
+			prefix.Equals(CommandInvoke2.Prefix, StringComparison.OrdinalIgnoreCase);
+	}
+
 	void OnCommandInvoke1(object? sender, ModuleCommandEventArgs e)
 	{
+		var command = e.Command;
+
+		// helper commands
+		if (command.StartsWith('#'))
+		{
+			InvokeHelpers(command);
+			return;
+		}
+
+		// Code
 		A.Psf.SyncPaths();
 
-		// if ends with `#` then omit echo else make echo with prefix
-		var echo = e.Command.TrimEnd();
-		if (echo.EndsWith('#'))
-		{
-			echo = null;
-		}
+		// echo / no echo
+		Func<string>? getEcho;
+		if (!command.StartsWith(' ') || command.EndsWith('#'))
+			getEcho = null;
 		else
-		{
-			var colon = e.Command.Length > 0 && char.IsWhiteSpace(e.Command[0]) ? ":" : ": ";
-			echo = CommandInvoke1.Prefix + colon + e.Command;
-		}
+			getEcho = () => CommandInvoke1.Prefix + ':' + command;
 
-		var ok = A.Psf.Run(new RunArgs(e.Command) { Writer = new ConsoleOutputWriter(echo) });
+		var ok = A.Psf.Run(new RunArgs(command) { Writer = new ConsoleOutputWriter(getEcho) });
 		e.Ignore = !ok;
 	}
 
@@ -129,5 +139,29 @@ public sealed class Entry : ModuleHost
 
 			_ => throw new ArgumentException("Unknown command.", nameof(command)),
 		};
+	}
+
+	static void InvokeHelpers(ReadOnlySpan<char> command)
+	{
+		switch (command.TrimEnd())
+		{
+			case "#invoke":
+				EditorKit.InvokeSelectedCode();
+				return;
+			case "#complete":
+				EditorKit.ExpandCode(null, null);
+				return;
+			case "#history":
+				A.Psf.ShowHistory();
+				return;
+			case "#enter":
+				EditorKit.PlayNativeEnter();
+				return;
+			case "#line-breakpoint":
+				DebuggerKit.OnLineBreakpoint();
+				return;
+			default:
+				throw new ModuleException($"Invalid command: '{command}'.");
+		}
 	}
 }

@@ -1,5 +1,4 @@
 ﻿using FarNet;
-using System.Linq;
 
 namespace RedisKit.Panels;
 
@@ -8,16 +7,13 @@ class SetPanel : BasePanel<SetExplorer>
 	public SetPanel(SetExplorer explorer) : base(explorer)
 	{
 		SortMode = PanelSortMode.Name;
-		ViewMode = 0;
 
 		var cn = new SetColumn { Kind = "N", Name = "Member" };
 
 		var plan0 = new PanelPlan { Columns = [cn] };
 		SetPlan(0, plan0);
 
-		var plan9 = plan0.Clone();
-		plan9.IsFullScreen = true;
-		SetPlan((PanelViewMode)9, plan9);
+		SetView(plan0);
 	}
 
 	protected override string HelpTopic => "set-panel";

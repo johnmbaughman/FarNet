@@ -17,16 +17,12 @@ task build meta, {
 	exec { dotnet build "$ModuleName.csproj" "/p:FarHome=$FarHome" "/p:Configuration=$Configuration" }
 }
 
-task publish {
-	exec { dotnet publish "$ModuleName.csproj" -c $Configuration -o $ModuleRoot --no-build }
-}
-
 task clean {
 	remove z, bin, obj, README.htm, Directory.Build.props, "*$ModuleName.*.nupkg"
 }
 
 task markdown {
-	assert (Test-Path $env:MarkdownCss)
+	requires -Path $env:MarkdownCss
 	exec { pandoc.exe @(
 		'README.md'
 		'--output=README.htm'
@@ -39,20 +35,19 @@ task markdown {
 }
 
 task version {
-	($script:Version = switch -regex -file History.txt {'^= (\d+\.\d+\.\d+) =$' {$matches[1]; break}})
+	($Script:Version = Get-BuildVersion History.txt '^= (\d+\.\d+\.\d+) =$')
 }
 
 task meta -Inputs .build.ps1, History.txt -Outputs Directory.Build.props -Jobs version, {
 	Set-Content Directory.Build.props @"
 <Project>
 	<PropertyGroup>
+		<Description>$Description</Description>
 		<Company>https://github.com/nightroman/FarNet</Company>
 		<Copyright>Copyright (c) Roman Kuzmin</Copyright>
-		<Description>$Description</Description>
 		<Product>FarNet.$ModuleName</Product>
 		<Version>$Version</Version>
-		<FileVersion>$Version</FileVersion>
-		<AssemblyVersion>$Version</AssemblyVersion>
+		<IncludeSourceRevisionInInformationalVersion>False</IncludeSourceRevisionInInformationalVersion>
 	</PropertyGroup>
 </Project>
 "@
@@ -64,7 +59,6 @@ task package markdown, {
 
 	# module
 	exec { robocopy $ModuleRoot $toModule /s /xf *.pdb } (0..2)
-	equals 4 (Get-ChildItem $toModule -Recurse -File).Count
 
 	# meta
 	Copy-Item -Destination z @(
@@ -78,15 +72,19 @@ task package markdown, {
 		'History.txt'
 		'..\LICENSE'
 	)
+
+	Assert-SameFile.ps1 -Result (Get-ChildItem $toModule -Recurse -File -Name) -Text -View $env:MERGE @'
+EditorConfig.Core.dll
+EditorKit.dll
+History.txt
+LICENSE
+README.htm
+'@
 }
 
 task nuget package, version, {
-	# test versions
-	$dllPath = "$FarHome\FarNet\Modules\$ModuleName\$ModuleName.dll"
-	($dllVersion = (Get-Item $dllPath).VersionInfo.FileVersion.ToString())
-	equals $dllVersion $Version
+	equals $Version (Get-Item "$ModuleRoot\$ModuleName.dll").VersionInfo.ProductVersion
 
-	# nuspec
 	Set-Content z\Package.nuspec @"
 <?xml version="1.0"?>
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
@@ -105,7 +103,7 @@ task nuget package, version, {
 	</metadata>
 </package>
 "@
-	# pack
+
 	exec { NuGet pack z\Package.nuspec }
 }
 

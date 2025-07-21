@@ -1,11 +1,4 @@
 ﻿
-// FarNet plugin for Far Manager
-// Copyright (c) Roman Kuzmin
-
-using System;
-using System.Collections.Generic;
-using System.IO;
-
 namespace FarNet.Tools;
 
 /// <summary>
@@ -46,7 +39,11 @@ public class FileSystemExplorer : Explorer
 		panel.Title = $"({Location})";
 	}
 
-	/// <inheritdoc/>
+	//! SCHB v2024.12.15.0 is confused by inheritdoc
+	/// <summary>
+	/// Returns the files.
+	/// </summary>
+	/// <param name="args">.</param>
 	public override IList<FarFile> GetFiles(GetFilesEventArgs args)
 	{
 		string[] directories;
@@ -54,8 +51,9 @@ public class FileSystemExplorer : Explorer
 		{
 			directories = Directory.GetDirectories(Location);
 		}
-		catch
+		catch (Exception ex)
 		{
+			Log.TraceException(ex);
 			directories = [];
 		}
 
@@ -64,8 +62,9 @@ public class FileSystemExplorer : Explorer
 		{
 			files = Directory.GetFiles(Location);
 		}
-		catch
+		catch (Exception ex)
 		{
+			Log.TraceException(ex);
 			files = [];
 		}
 
@@ -85,7 +84,10 @@ public class FileSystemExplorer : Explorer
 				});
 			}
 		}
-		catch { }
+		catch (Exception ex)
+		{
+			Log.TraceException(ex);
+		}
 
 		try
 		{
@@ -102,7 +104,10 @@ public class FileSystemExplorer : Explorer
 				});
 			}
 		}
-		catch { }
+		catch (Exception ex)
+		{
+			Log.TraceException(ex);
+		}
 
 		return result;
 	}

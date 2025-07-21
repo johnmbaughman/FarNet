@@ -1,6 +1,6 @@
 ﻿using FarNet;
+using GitKit.About;
 using GitKit.Commands;
-using GitKit.Extras;
 using LibGit2Sharp;
 using System;
 using System.Linq;
@@ -11,9 +11,7 @@ class BranchesPanel : BasePanel<BranchesExplorer>
 {
 	public BranchesPanel(BranchesExplorer explorer) : base(explorer)
 	{
-		Title = $"Branches {explorer.Repository.Info.WorkingDirectory}";
 		SortMode = PanelSortMode.Unsorted;
-		ViewMode = 0;
 
 		var co = new SetColumn { Kind = "O", Name = " ", Width = 2 };
 		var cn = new SetColumn { Kind = "N", Name = "Branch" };
@@ -21,57 +19,71 @@ class BranchesPanel : BasePanel<BranchesExplorer>
 
 		var plan0 = new PanelPlan { Columns = [co, cn, cd] };
 		SetPlan(0, plan0);
+
+		SetView(plan0);
 	}
 
 	protected override string HelpTopic => "branches-panel";
 
-	static string GetSampleBranchName(Branch branch)
+	string GetSampleBranchName(string branchName)
 	{
-		var name = branch.FriendlyName;
-		if (!branch.IsRemote)
-			return name;
+		var index = branchName.IndexOf('/');
+		if (index < 0)
+			return branchName == Const.NoBranchName ? string.Empty : branchName;
 
-		var index = name.IndexOf('/');
-		return index < 0 ? name : name[(index + 1)..];
+		using var repo = new Repository(GitDir);
+
+		var branch = repo.Branches[branchName];
+		if (!branch.IsRemote)
+			return branchName;
+
+		return branchName[(index + 1)..];
 	}
 
-	static string? InputNewBranchName(Branch branch)
+	string? InputNewBranchName(string branchName)
 	{
 		return Far.Api.Input(
 			"New branch name",
 			"GitBranch",
-			$"Create new branch from '{branch.FriendlyName}'",
-			GetSampleBranchName(branch));
+			$"Create new branch from '{branchName}'",
+			GetSampleBranchName(branchName));
 	}
 
-	static void CloneBranch(ExplorerEventArgs args, Branch branch, Action action)
+	void CloneBranch(ExplorerEventArgs args, string branchName, Action action)
 	{
-		var newName = InputNewBranchName(branch);
+		var newName = InputNewBranchName(branchName);
 		if (string.IsNullOrEmpty(newName))
 		{
 			args.Result = JobResult.Ignore;
 			return;
 		}
 
-		args.Data = (branch, newName);
+		args.Data = (branchName, newName);
 		action();
 	}
 
 	void CheckoutBranch()
 	{
-		if (CurrentFile?.Data is not Branch branch || branch.IsCurrentRepositoryHead)
+		var branchName = CurrentFile?.Name;
+		if (branchName is null)
+			return;
+
+		using var repo = new Repository(GitDir);
+
+		var branch = repo.MyBranch(branchName);
+		if (branch.IsCurrentRepositoryHead)
 			return;
 
 		// create local tracked branch from remote
 		if (branch.IsRemote)
 		{
-			var newName = InputNewBranchName(branch);
+			var newName = InputNewBranchName(branchName);
 			if (string.IsNullOrEmpty(newName))
 				return;
 
-			var newBranch = Repository.CreateBranch(newName, branch.Tip);
+			var newBranch = repo.CreateBranch(newName, branch.Tip);
 
-			branch = Repository.Branches.Update(
+			branch = repo.Branches.Update(
 				newBranch,
 				b => b.TrackedBranch = branch.CanonicalName);
 
@@ -79,8 +91,8 @@ class BranchesPanel : BasePanel<BranchesExplorer>
 		}
 
 		// checkout local branch
-		if (!Repository.Info.IsBare)
-			LibGit2Sharp.Commands.Checkout(Repository, branch);
+		if (!repo.Info.IsBare)
+			LibGit2Sharp.Commands.Checkout(repo, branch);
 
 		Update(true);
 		Redraw();
@@ -88,32 +100,43 @@ class BranchesPanel : BasePanel<BranchesExplorer>
 
 	void CompareBranches()
 	{
-		var (data1, data2) = GetSelectedDataRange<Branch>();
-		if (data2 is null)
+		var (branchName1, branchName2) = GetSelectedDataRange(x => x.Name);
+		if (branchName2 is null)
 			return;
 
-		data1 ??= Repository.Head;
+		using var repo = new Repository(GitDir);
 
-		var commits = new Commit[] { data1.Tip, data2.Tip }.OrderBy(x => x.Author.When).ToArray();
+		var branch1 = branchName1 is null ? repo.Head : repo.MyBranch(branchName1);
+		var branch2 = repo.MyBranch(branchName2);
 
-		CompareCommits(commits[0], commits[1]);
+		var commits = new Commit[] { branch1.Tip, branch2.Tip }.OrderBy(x => x.Author.When).ToArray();
+
+		CompareCommits(commits[0].Sha, commits[1].Sha);
 	}
 
 	void MergeBranch()
 	{
-		if (Repository.Info.IsHeadDetached)
+		var branchName = CurrentFile?.Name;
+		if (branchName is null)
 			return;
 
-		if (CurrentFile?.Data is not Branch branch || branch.Tip == Repository.Head.Tip)
+		using var repo = new Repository(GitDir);
+
+		if (repo.Info.IsHeadDetached)
+			return;
+
+		var branch = repo.Branches[branchName];
+
+		if (branch.Tip == repo.Head.Tip)
 			return;
 
 		if (0 != Far.Api.Message(
-			$"Merge branch '{branch.FriendlyName}' into '{Repository.Head.FriendlyName}'?",
+			$"Merge branch '{branchName}' into '{repo.Head.FriendlyName}'?",
 			Host.MyName,
 			MessageOptions.YesNo))
 			return;
 
-		Repository.Merge(branch, Lib.BuildSignature(Repository));
+		repo.Merge(branch, Lib.BuildSignature(repo));
 
 		Update(true);
 		Redraw();
@@ -121,32 +144,57 @@ class BranchesPanel : BasePanel<BranchesExplorer>
 
 	void PushBranch()
 	{
-		if (CurrentFile?.Data is Branch branch)
-			PushCommand.PushBranch(Repository, branch);
+		var branchName = CurrentFile?.Name;
+		if (branchName is null)
+			return;
+
+		if (branchName == Const.NoBranchName)
+			throw new ModuleException($"Cannot push {Const.NoBranchName}.");
+
+		using var repo = new Repository(GitDir);
+
+		var branch = repo.Branches[branchName];
+		PushCommand.PushBranch(repo, branch);
+	}
+
+	void CopySha()
+	{
+		var branchName = CurrentFile?.Name;
+		if (branchName is null)
+			return;
+
+		using var repo = new Repository(GitDir);
+
+		var branch = repo.MyBranch(branchName);
+		if (branch.Tip is { } tip)
+			UI.CopySha(tip);
 	}
 
 	internal override void AddMenu(IMenu menu)
 	{
-		menu.Add("Push branch", (s, e) => PushBranch());
-		menu.Add("Merge branch", (s, e) => MergeBranch());
-		menu.Add("Compare branches", (s, e) => CompareBranches());
+		menu.Add(Const.CopySha, (s, e) => CopySha());
+		menu.Add(Const.PushBranch, (s, e) => PushBranch());
+		menu.Add(Const.MergeBranch, (s, e) => MergeBranch());
+		menu.Add(Const.CompareBranches, (s, e) => CompareBranches());
 	}
 
 	public override void UICloneFile(CloneFileEventArgs args)
 	{
-		var branch = (Branch)args.File.Data!;
-		CloneBranch(args, branch, () => Explorer.CloneFile(args));
+		var branchName = args.File.Name;
+		CloneBranch(args, branchName, () => Explorer.CloneFile(args));
 	}
 
 	public override void UICreateFile(CreateFileEventArgs args)
 	{
-		var branch = Repository.Head;
-		CloneBranch(args, branch, () => Explorer.CreateFile(args));
+		using var repo = new Repository(GitDir);
+
+		var branch = repo.Head;
+		CloneBranch(args, branch.FriendlyName, () => Explorer.CreateFile(args));
 	}
 
 	public override void UIDeleteFiles(DeleteFilesEventArgs args)
 	{
-		var text = $"Delete {args.Files.Count} branches:\n{string.Join("\n", args.Files.Select(x => x.Name))}";
+		var text = $"Delete branches ({args.Files.Count})\n{string.Join("\n", args.Files.Select(x => x.Name))}";
 		var op = MessageOptions.YesNo | MessageOptions.LeftAligned;
 		if (args.Force)
 			op |= MessageOptions.Warning;
@@ -162,14 +210,23 @@ class BranchesPanel : BasePanel<BranchesExplorer>
 
 	public override void UIRenameFile(RenameFileEventArgs args)
 	{
-		var branch = (Branch)args.File.Data!;
+		var branchName = args.File.Name;
+		if (branchName == Const.NoBranchName)
+		{
+			args.Result = JobResult.Ignore;
+			return;
+		}
+
+		using var repo = new Repository(GitDir);
+
+		var branch = repo.Branches[branchName];
 		if (branch.IsRemote)
 		{
 			args.Result = JobResult.Ignore;
 			return;
 		}
 
-		var newName = (Far.Api.Input("New branch name", "GitBranch", "Rename branch", branch.FriendlyName) ?? string.Empty).Trim();
+		var newName = (Far.Api.Input("New branch name", "GitBranch", "Rename branch", branchName) ?? string.Empty).Trim();
 		if (newName.Length == 0)
 		{
 			args.Result = JobResult.Ignore;

@@ -4,7 +4,7 @@
 	Author: Roman Kuzmin
 
 .Description
-	This command calls Search-Everything and shows the list of results.
+	It calls Search-Everything and shows the list of results.
 	Select an item in order to navigate to it in the panel.
 	Select the item <Panel> in order to panel the results.
 
@@ -23,6 +23,16 @@
 		Specifies the search filter used by Everything.
 		See: help Search-Everything -Parameter Filter
 
+		If Filter contains "edit:" or ends with ":edit" (or just ":") then
+		this string is removed, "file:" is used instead and the found file
+		is opened in editor.
+
+		Relaxed space: allow spaces after colons ":" used in filter.
+
+		Backtick rule: allow two backticks, they are removed together with text
+		after the second. This is suitable for copying from markdown notes, see
+		example below.
+
 .Parameter Limit
 		Specifies the maximum number of results.
 		Default: Settings/Limit
@@ -32,6 +42,26 @@
 
 .Parameter All
 		Tells to ignore Settings/PathExclude.
+
+.Example
+	>
+	# Using Lua macro command prefix "see:"
+
+		CommandLine {
+		  prefixes = "see";
+		  description = "Go-Everything.ps1";
+		  action = function(prefix, text)
+		    Plugin.SyncCall("10435532-9BB3-487B-A045-B0E6ECAAB6BC", ":vps:Go-Everything.ps1 '" .. text:gsub("'", "''") .. "'")
+		  end;
+		}
+
+	you can make simple calls:
+
+		see: <filter>
+
+	Example with allowed spaces and backticks:
+
+		see: folder: `<part-to-take>` <part-to-drop>
 #>
 
 [CmdletBinding()]
@@ -46,13 +76,13 @@ param(
 )
 
 #requires -Version 7.4 -Modules PSEverything
-$ErrorActionPreference = 1
-trap { $PSCmdlet.ThrowTerminatingError($_) }
-if ($Host.Name -ne 'FarHost') {throw 'Requires FarHost.'}
+$ErrorActionPreference = 1; trap {$PSCmdlet.ThrowTerminatingError($_)}; if ($Host.Name -ne 'FarHost') {throw 'Requires FarHost.'}
 
-### Settings
+# preprocess filter, undo relaxed spaces and backticks enclosing a part
+$Filter = $Filter.Trim() -replace ':\s+', ':' -replace '`(.*?)`.*', '$1'
 
-$sets = [FarNet.User]::GetOrAdd('GoEverything', {
+### Make settings
+$settings = [FarNet.User]::GetOrAdd('GoEverything', {
 	Add-Type -ReferencedAssemblies System.Xml.ReaderWriter @'
 using System.Xml.Serialization;
 [XmlRoot("Data")]
@@ -73,11 +103,23 @@ public class GoEverything
 	[FarNet.ModuleSettings[GoEverything]]::new("$env:FARPROFILE\FarNet\PowerShellFar\GoEverythingSettings.xml")
 })
 
+### Edit settings
 if (!$Filter) {
-	return $sets.Edit()
+	return $settings.Edit()
 }
 
-$data = $sets.GetData()
+### Edit?
+$isEdit = $false
+if ($Filter -match '(^.*):(?:edit|edi|ed|e)?\s*$') {
+	$isEdit = $true
+	$Filter = 'file:' + $Matches[1]
+}
+elseif ($Filter -match '\bedit:') {
+	$isEdit = $true
+	$Filter = $Filter.Replace('edit:', 'file:')
+}
+
+$data = $settings.GetData()
 
 ### Get items
 
@@ -122,6 +164,11 @@ else {
 		$Items | Out-FarPanel -Title Everything -Columns @{n=$Filter; e={$_}}
 		return
 	}
+}
+
+if ($isEdit) {
+	Open-FarEditor $Path
+	return
 }
 
 if ($Far.Panel.IsPlugin) {

@@ -17,39 +17,31 @@ task build meta, {
 	exec { dotnet build -c $Configuration /p:FarHome=$FarHome }
 }
 
-task publish {
-	$null = mkdir $ModuleRoot -Force
-	Copy-Item -Destination $ModuleRoot @(
-		"bin\$Configuration\net8.0\$ModuleName.dll"
-		"bin\$Configuration\net8.0\$ModuleName.pdb"
-	)
-}
-
 task clean {
 	remove z, bin, obj, README.htm, FarNet.$ModuleName.*.nupkg
 }
 
 task version {
-	($script:Version = switch -regex -file History.txt {'^= (\d+\.\d+\.\d+) =$' {$matches[1]; break}})
-	assert $script:Version
+	($Script:Version = Get-BuildVersion History.txt '^= (\d+\.\d+\.\d+) =$')
 }
 
 task meta -Inputs .build.ps1, History.txt -Outputs Directory.Build.props version, {
 	Set-Content Directory.Build.props @"
 <Project>
-  <PropertyGroup>
-    <Company>https://github.com/nightroman/FarNet</Company>
-    <Copyright>Copyright (c) Roman Kuzmin</Copyright>
-    <Product>FarNet.$ModuleName</Product>
-    <Version>$Version</Version>
-    <Description>$Description</Description>
-  </PropertyGroup>
+	<PropertyGroup>
+		<Description>$Description</Description>
+		<Company>https://github.com/nightroman/FarNet</Company>
+		<Copyright>Copyright (c) Roman Kuzmin</Copyright>
+		<Product>FarNet.$ModuleName</Product>
+		<Version>$Version</Version>
+		<IncludeSourceRevisionInInformationalVersion>False</IncludeSourceRevisionInInformationalVersion>
+	</PropertyGroup>
 </Project>
 "@
 }
 
 task markdown {
-	assert (Test-Path $env:MarkdownCss)
+	requires -Path $env:MarkdownCss
 	exec {
 		pandoc.exe @(
 			'README.md'
@@ -64,7 +56,6 @@ task markdown {
 }
 
 task package markdown, version, {
-	equals "$Version.0" (Get-Item $ModuleRoot\$ModuleName.dll).VersionInfo.FileVersion
 	$toModule = "z\tools\FarHome\FarNet\Modules\$ModuleName"
 
 	remove z
@@ -86,6 +77,8 @@ task package markdown, version, {
 }
 
 task nuget package, version, {
+	equals $Version (Get-Item "$ModuleRoot\$ModuleName.dll").VersionInfo.ProductVersion
+
 	Set-Content z\Package.nuspec @"
 <?xml version="1.0"?>
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">

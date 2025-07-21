@@ -1,12 +1,5 @@
-﻿
-// FarNet module EditorKit
-// Copyright (c) Roman Kuzmin
-
-using EditorConfig.Core;
+﻿using EditorConfig.Core;
 using FarNet;
-using System;
-using System.Collections.Generic;
-using System.IO;
 
 namespace EditorKit;
 
@@ -22,15 +15,30 @@ public class Config : ModuleEditor
 	bool do_trim_trailing_whitespace;
 	bool do_insert_final_newline;
 
-	// Called by the core when a file matching Mask is opened in the editor.
+	static void Extras(IEditor editor, string fileName)
+	{
+		var settings = Settings.Default.GetData();
+
+		var colorerType = settings.ColorerTypes.FirstOrDefault(x => Far.Api.IsMaskMatch(fileName, x.Mask, x.Full));
+		if (colorerType is { })
+			editor.Opened += (s, e) => SetColorerType(colorerType.Type);
+	}
+
+	static void SetColorerType(string colorerType)
+	{
+		if (colorerType.Any(x => !Char.IsLetterOrDigit(x)))
+			throw new ModuleException($"Invalid Colorer type: '{colorerType}'.");
+
+		Far.Api.PostMacro($"Plugin.Call('D2F36B62-A470-418d-83A3-ED7A3710E5B5', 'Types', 'Set', '{colorerType}')");
+	}
+
 	public override void Invoke(IEditor editor, ModuleEditorEventArgs e)
 	{
 		// get the file name, it may be amended
 		var fileName = editor.FileName;
 
-		// ?NewFile?
-		if (fileName.Contains('?'))
-			return;
+		// apply extras from settings
+		Extras(editor, fileName);
 
 		// get the usual configurations
 		var parser = new EditorConfigParser();
@@ -39,7 +47,7 @@ public class Config : ModuleEditor
 		{
 			// get the profile configurations to use with the amended file
 			var defaults = GetProfileConfigurations(ref fileName);
-			if (defaults == null)
+			if (defaults is null)
 				return;
 
 			configurations = defaults;
@@ -117,18 +125,18 @@ public class Config : ModuleEditor
 	}
 
 	// Trims lines, etc.
-	void OnSaving(object sender, EventArgs e)
+	void OnSaving(object? sender, EventArgs e)
 	{
-		var editor = (IEditor)sender;
+		var editor = (IEditor)sender!;
 
 		if (do_trim_trailing_whitespace)
 		{
 			foreach (ILine line in editor.Lines)
 			{
-				string s1 = line.Text;
-				string s2 = s1.TrimEnd();
-				if (!ReferenceEquals(s1, s2))
-					line.Text = s2;
+				var s1 = line.Text2;
+				var s2 = s1.TrimEnd();
+				if (s1.Length != s2.Length)
+					line.Text2 = s2;
 			}
 		}
 
@@ -145,14 +153,14 @@ public class Config : ModuleEditor
 	}
 
 	// Gets profile configurations and alters the file name.
-	IList<EditorConfigFile> GetProfileConfigurations(ref string fileName)
+	IList<EditorConfigFile>? GetProfileConfigurations(ref string fileName)
 	{
 		var root = Manager.GetFolderPath(SpecialFolder.RoamingData, false);
-		var path = Path.Combine(root, ".editorconfig");
+		var path = Path.Join(root, ".editorconfig");
 		if (!File.Exists(path))
 			return null;
 
-		fileName = Path.Combine(root, Path.GetFileName(fileName));
+		fileName = Path.Join(root, Path.GetFileName(fileName));
 
 		var parser = new EditorConfigParser();
 		return parser.GetConfigurationFilesTillRoot(fileName);

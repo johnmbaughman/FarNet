@@ -3,6 +3,7 @@
 // Copyright (c) Roman Kuzmin
 
 using System;
+using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.Loader;
 
@@ -18,7 +19,8 @@ class AssemblyLoadContext2(string pluginPath, bool isCollectible = false) : Asse
 		if (assemblyPath is null)
 			return null;
 
-		Log.Source.TraceInformation("Load managed {0}", assemblyPath);
+		Debug.WriteLine($"## ALC {assemblyPath}");
+
 		return LoadFromAssemblyPath(assemblyPath);
 	}
 

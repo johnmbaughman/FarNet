@@ -1,7 +1,3 @@
-
-// FarNet plugin for Far Manager
-// Copyright (c) Roman Kuzmin
-
 #include "stdafx.h"
 #include "Far1.h"
 #include "CommandLine.h"
@@ -20,11 +16,11 @@
 #include "Window.h"
 
 namespace FarNet
-{;
+{
 String^ Far1::CurrentDirectory::get()
 {
 	CBox box;
-	while(box(Info.FSF->GetCurrentDirectory(box.Size(), box))) {}
+	while (box(Info.FSF->GetCurrentDirectory(box.Size(), box))) {}
 
 	return gcnew String(box);
 }
@@ -32,7 +28,7 @@ String^ Far1::CurrentDirectory::get()
 IModuleAction^ Far1::GetModuleAction(Guid id)
 {
 	IModuleAction^ action;
-	if (!Works::Host::Actions->TryGetValue(id, action))
+	if (!Works::Far2::Actions->TryGetValue(id, action))
 		return nullptr;
 
 	return action;
@@ -87,12 +83,12 @@ array<IViewer^>^ Far1::Viewers()
 
 IAnyEditor^ Far1::AnyEditor::get()
 {
-	return %Editor0::_anyEditor;
+	return % Editor0::_anyEditor;
 }
 
 IAnyViewer^ Far1::AnyViewer::get()
 {
-	return %Viewer0::_anyViewer;
+	return % Viewer0::_anyViewer;
 }
 
 String^ Far1::PasteFromClipboard()
@@ -153,7 +149,7 @@ String^ Far1::KeyInfoToName(KeyInfo^ key)
 	ir.Event.KeyEvent.wRepeatCount = 1;
 
 	const size_t size = 100;
-	wchar_t name[size] = {0};
+	wchar_t name[size] = { 0 };
 	if (!Info.FSF->FarInputRecordToName(&ir, name, size))
 		return nullptr;
 
@@ -166,29 +162,29 @@ ILine^ Far1::Line::get()
 	switch (Window->Kind)
 	{
 	case FarNet::WindowKind::Editor:
-		{
-			IEditor^ editor = Editor;
-			return editor->Line;
-		}
+	{
+		IEditor^ editor = Editor;
+		return editor->Line;
+	}
 	case FarNet::WindowKind::Panels:
-		{
-			return CommandLine;
-		}
+	{
+		return CommandLine;
+	}
 	case FarNet::WindowKind::Dialog:
-		{
-			dialog = Dialog;
-		}
-		break;
+	{
+		dialog = Dialog;
+	}
+	break;
 	case FarNet::WindowKind::Menu:
-		{
-			FarNet::MacroArea area = Far::Api->MacroArea;
-			if (area == FarNet::MacroArea::ShellAutoCompletion)
-				return CommandLine;
+	{
+		FarNet::MacroArea area = Far::Api->MacroArea;
+		if (area == FarNet::MacroArea::ShellAutoCompletion)
+			return CommandLine;
 
-			if (area == FarNet::MacroArea::DialogAutoCompletion)
-				dialog = Dialog;
-		}
-		break;
+		if (area == FarNet::MacroArea::DialogAutoCompletion)
+			dialog = Dialog;
+	}
+	break;
 	}
 
 	if (dialog)
@@ -241,10 +237,6 @@ void Far1::ShowError(String^ title, Exception^ error)
 	FarNet::MacroState macro = MacroState;
 	if (macro == FarNet::MacroState::Executing || macro == FarNet::MacroState::ExecutingCommon)
 	{
-		// log
-		msgMacro = "A macro was stopped.";
-		Log::Source->TraceEvent(TraceEventType::Warning, 0, msgMacro);
-
 		// stop
 		UI->Break();
 	}
@@ -325,7 +317,7 @@ String^ Far1::TempName(String^ prefix)
 	PIN_NE(pin, prefix);
 
 	CBox box;
-	while(box(Info.FSF->MkTemp(box, box.Size(), pin))) {}
+	while (box(Info.FSF->MkTemp(box, box.Size(), pin))) {}
 
 	return gcnew String(box);
 }
@@ -371,20 +363,31 @@ void Far1::PostMacro(String^ macro, bool enableOutput, bool disablePlugins)
 	auto arg2 = (MacroParseResult*)data.get();
 	arg2->StructSize = sizeof(MacroParseResult);
 	Info.MacroControl(&MainGuid, MCTL_GETLASTERROR, size, arg2);
-	String^ err = String::Format(
-		"Error message: {0}\n"
-		"Position: {1}, {2}\n"
-		"Macro: {3}",
-		gcnew String(arg2->ErrSrc),
-		arg2->ErrPos.Y,
-		arg2->ErrPos.X,
-		macro);
-	throw gcnew ArgumentException(err, "macro");
+
+	StringBuilder sb;
+
+	sb.Append("Error message: ");
+	sb.Append(gcnew String(arg2->ErrSrc));
+	sb.AppendLine();
+
+	sb.Append("Position: ");
+	sb.Append(arg2->ErrPos.Y);
+	sb.Append(", ");
+	sb.Append(arg2->ErrPos.X);
+	sb.AppendLine();
+
+	sb.Append("Macro: ");
+	sb.Append(macro);
+
+	throw gcnew ArgumentException(sb.ToString());
 }
 
 void Far1::Quit()
 {
-	if (!Works::ModuleLoader::CanExit())
+	QuittingEventArgs ea;
+
+	FarNet::Works::Far2::Api->OnQuit(% ea);
+	if (ea.Ignore)
 		return;
 
 	Info.AdvControl(&MainGuid, ACTL_QUIT, 0, 0);
@@ -397,14 +400,14 @@ ILine^ Far1::CommandLine::get()
 
 IWindow^ Far1::Window::get()
 {
-	return %FarNet::Window::Instance;
+	return % FarNet::Window::Instance;
 }
 
 // Implementation of Far methods.
 
 IUserInterface^ Far1::UI::get()
 {
-	return %FarUI::Instance;
+	return % FarUI::Instance;
 }
 
 bool Far1::IsMaskMatch(String^ path, String^ mask, bool full)
@@ -454,7 +457,7 @@ void Far1::ShowHelp(String^ path, String^ topic, HelpOptions options)
 
 IHistory^ Far1::History::get()
 {
-	return %FarNet::History::Instance;
+	return % FarNet::History::Instance;
 }
 
 Object^ Far1::GetSetting(FarSetting settingSet, String^ settingName)
@@ -465,7 +468,7 @@ Object^ Far1::GetSetting(FarSetting settingSet, String^ settingName)
 	if (!settings.Get((int)settingSet, settingName, arg))
 		throw gcnew ArgumentException(String::Format("Cannot get setting: set = '{0}' name = '{1}'", settingSet, settingName));
 
-	switch(arg.Type)
+	switch (arg.Type)
 	{
 	case FST_QWORD:
 		return (System::Int64)arg.Number;
@@ -473,10 +476,9 @@ Object^ Far1::GetSetting(FarSetting settingSet, String^ settingName)
 		return gcnew String(arg.String);
 	case FST_DATA:
 		array<Byte>^ arr = gcnew array<Byte>((int)arg.Data.Size);
-		for(int i = arr->Length; --i >= 0;) arr[i] = ((char*)arg.Data.Data)[i];
+		for (int i = arr->Length; --i >= 0;) arr[i] = ((char*)arg.Data.Data)[i];
 		return arr;
 	}
 	return nullptr;
 }
-
 }

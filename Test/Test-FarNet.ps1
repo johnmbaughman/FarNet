@@ -26,9 +26,10 @@
 [CmdletBinding()]
 param(
 	$Tests = -1,
-	$ExpectedTaskCount = 207,
-	$ExpectedBasicsCount = 18,
-	$ExpectedExtrasCount = 6,
+	$ExpectedTaskCount = 209,
+	$ExpectedIBTestCount = 5,
+	$ExpectedBasicsCount = 15,
+	$ExpectedExtrasCount = 9,
 	[switch]$All,
 	[switch]$Quit
 )
@@ -57,42 +58,51 @@ else {
 
 ### Initialize
 $null = & $PSScriptRoot\About\Initialize-Test.far.ps1
-[Diagnostics.Trace]::WriteLine("$(Get-Date) Begin tests")
+[Diagnostics.Debug]::WriteLine("# $(Get-Date) Begin tests")
 
-### Basic tests
+### Basic tests first
 if (!$Tests) {
-	$basics = @(Get-ChildItem "$env:FarNetCode\Test\Basics" -Filter *.far.ps1)
-	Assert-Far $basics.Count -eq $ExpectedBasicsCount
-	foreach($test in $basics) {
-		[Diagnostics.Trace]::TraceInformation($test.FullName)
+	$items = @(Get-ChildItem "$env:FarNetCode\Test\Basics" -Filter *.far.ps1)
+	Assert-Far $items.Count -eq $ExpectedBasicsCount
+	foreach($test in $items) {
+		[Diagnostics.Debug]::WriteLine("# $($test.FullName)")
 		& $test.FullName
 		if ($global:Error) {throw "Errors after $($test.FullName)" }
 	}
+}
 
-	#! IB tests after basics
-	Invoke-Build ** "$env:FarNetCode\Test\Basics"
+### Then IB tests
+if (!$Tests) {
+	$items = @(Get-ChildItem $env:FarNetCode\Test -Recurse -Include *.test.ps1)
+	Assert-Far $items.Count -eq $ExpectedIBTestCount
+	Invoke-Build ** $env:FarNetCode\Test
 }
 
 ### Extra tests
-if ($All) {
-	$extras = @(
-		Get-Item "$env:FarNetCode\Test\TabExpansion\Test-TabExpansion2-.ps1"
+$extras = @(
+	if ($All) {
+		{ Invoke-Build test "$env:FarNetCode\FarNet" }
+		Get-Item "$env:FarNetCode\Test\TabExpansion\Test-TabExpansion2.far.ps1"
 		{ & "$env:FarNetCode\Test\TabExpansion\Test-TabExpansion2.ps1" pwsh }
 		{ & "$env:FarNetCode\Test\TabExpansion\Test-TabExpansion2.ps1" powershell }
-		{ Invoke-Build test "$env:FarNetCode\GitKit\.build.ps1" }
-		{ Invoke-Build test "$env:FarNetCode\FSharpFar\.build.ps1" }
-		{ Invoke-Build test "$env:FarNetCode\JavaScriptFar\.build.ps1" }
-	)
-	Assert-Far $extras.Count -eq $ExpectedExtrasCount
-	foreach($test in $extras) {
-		[Diagnostics.Trace]::TraceInformation($test)
-		& $test
-		if ($global:Error) {throw "Errors after extra test: $test" }
+		{ Invoke-Build test "$env:FarNetCode\GitKit" }
+		{ Invoke-Build test "$env:FarNetCode\FSharpFar" }
+		{ Invoke-Build test "$env:FarNetCode\JavaScriptFar" }
+		{ Invoke-Build test "$env:FarNetCode\JsonKit" }
+		{ Invoke-Build test "$env:FarNetCode\RedisKit" }
 	}
+)
+if ($All) {
+	Assert-Far $extras.Count -eq $ExpectedExtrasCount
+}
+foreach($test in $extras) {
+	[Diagnostics.Debug]::WriteLine("# $test")
+	& $test
+	if ($global:Error) {throw "Errors after extra test: $test" }
 }
 
 ### Main tests
-Start-FarTask -Data Tests, ExpectedTaskCount, All, SavedPanelPaths {
+Start-FarTask -Data Tests, ExpectedTaskCount, SavedPanelPaths {
 	$Data.Stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 	$Data.TaskCount = 0
 
@@ -102,8 +112,8 @@ Start-FarTask -Data Tests, ExpectedTaskCount, All, SavedPanelPaths {
 			# tests
 			Get-ChildItem $env:FarNetCode\Test -Force -Recurse -Include *.fas.ps1
 			# outer
-			Get-Item $env:FarNetCode\PowerShellFar\Samples\FarTask\Basics.fas.ps1
-			Get-Item $env:FarNetCode\PowerShellFar\Samples\FarTask\Test-Dialog.fas.ps1
+			Get-Item $env:FarNetCode\Samples\FarTask\Basics.fas.ps1
+			Get-Item $env:FarNetCode\Samples\FarTask\Test-Dialog.fas.ps1
 		)
 	}
 
@@ -114,50 +124,39 @@ Start-FarTask -Data Tests, ExpectedTaskCount, All, SavedPanelPaths {
 	}
 
 	### Run tests
-	foreach($test in $Data.Tests) {
-		[Diagnostics.Trace]::TraceInformation($test.FullName)
+	foreach($item in $Data.Tests) {
+		++$Data.taskCount
+		$TestFile = $item.FullName
+		[Diagnostics.Debug]::WriteLine("# $TestFile")
 
 		### Run current test
-		$result = job -Arguments $test.FullName {
-			switch -Wildcard ($args[0]) {
-				*.fas.ps1 {
-					++$Data.taskCount
-					Start-FarTask $_ -AsTask
-					break
-				}
-				default {
-					throw "Unknown test file: $_"
-				}
-			}
+		$result = job {
+			Start-FarTask $Var.TestFile -AsTask
 		}
 
 		### Check test output
 		if ($result) {
-			throw "Unexpected test output:`r`n$($test.FullName)`r`n$result"
+			throw "$TestFile`nUnexpected test output:`n$result"
 		}
 
-		### Check after test
-		$result = job {
-			try {
+		### Check test effects
+		try {
+			job {
 				[FarNet.Works.Test]::AssertNormalState()
+
 				if ($global:Error) {
 					throw "Unexpected error after test: $($global:Error[-1])"
 				}
 			}
-			catch {
-				$_
-			}
 		}
-
-		### Show after test issues
-		if ($result) {
-			throw "$($test.FullName):`r`n$result"
+		catch {
+			throw "$TestFile`n$_"
 		}
 	}
 
 	### Finish
 	ps: {
-		[Diagnostics.Trace]::WriteLine("$(Get-Date) End tests")
+		[Diagnostics.Debug]::WriteLine("# $(Get-Date) End tests")
 		$r = Clear-Session -KeepError -Verbose
 		$r | Format-List
 		if ($r.RemovedVariableCount) {
@@ -167,10 +166,6 @@ Start-FarTask -Data Tests, ExpectedTaskCount, All, SavedPanelPaths {
 	job {
 		### Quit after tests?
 		if ($env:QuitFarAfterTests -eq 1) {
-			# clean jobs
-			while($job = @([PowerShellFar.Job]::Jobs)) {
-				$job[0].Dispose()
-			}
 			$Far.Quit()
 		}
 		else {
@@ -178,15 +173,13 @@ Start-FarTask -Data Tests, ExpectedTaskCount, All, SavedPanelPaths {
 			$Far.Panel.CurrentDirectory = $Data.SavedPanelPaths[0]
 			$Far.Panel2.CurrentDirectory = $Data.SavedPanelPaths[1]
 
-			### Start job tests
-			if ($Data.All) {
-				Start-FarJob { & "$env:PSF\Samples\Tests\Test-Job-.ps1" }
-			}
-
-			### Write summary
-			$colors = 'Yellow', 'Green'
-			Write-Host "Tasks: $($Data.TaskCount)/$($Data.ExpectedTaskCount)" -ForegroundColor ($colors[$Data.TaskCount -eq $Data.ExpectedTaskCount])
+			### Summary
+			Write-Host "Tasks: $($Data.TaskCount)/$($Data.ExpectedTaskCount)" -ForegroundColor ($Data.TaskCount -eq $Data.ExpectedTaskCount ? 'Green' : 'Yellow')
 			Write-Host "$($Data.Stopwatch.Elapsed)" -ForegroundColor Green
+
+			### DEBUG
+			if ((Get-Item $env:FARHOME\FarNet\FarNet.dll).VersionInfo.Comments -like '*DEBUG*') { Write-Host FN=DEBUG -ForegroundColor Red }
+			if ((Get-Item $env:FARHOME\FarNet\Modules\PowerShellFar\PowerShellFar.dll).VersionInfo.Comments -like '*DEBUG*') { Write-Host PS=DEBUG -ForegroundColor Red }
 		}
 	}
 }

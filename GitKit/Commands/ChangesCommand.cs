@@ -1,7 +1,5 @@
 ﻿using FarNet;
-using GitKit.Extras;
 using GitKit.Panels;
-using System.Data.Common;
 
 namespace GitKit.Commands;
 
@@ -9,9 +7,9 @@ sealed class ChangesCommand : BaseCommand
 {
 	readonly ChangesExplorer.Kind _kind;
 
-	public ChangesCommand(DbConnectionStringBuilder parameters) : base(parameters)
+	public ChangesCommand(CommandParameters parameters) : base(parameters)
 	{
-		var kind = parameters.GetString(Parameter.Kind);
+		var kind = parameters.GetString(Param.Kind);
 		_kind = kind switch
 		{
 			"NotCommitted" => ChangesExplorer.Kind.NotCommitted,
@@ -19,13 +17,13 @@ sealed class ChangesCommand : BaseCommand
 			"Staged" => ChangesExplorer.Kind.Staged,
 			"Head" => ChangesExplorer.Kind.Head,
 			"Last" or null => ChangesExplorer.Kind.Last,
-			_ => throw new ModuleException($"Unknown {Parameter.Kind} value: '{kind}'.")
+			_ => throw parameters.ParameterError(Param.Kind, $"Unknown value: '{kind}'.")
 		};
 	}
 
 	public override void Invoke()
 	{
-		new ChangesExplorer(Repository, new ChangesExplorer.Options { Kind = _kind })
+		new ChangesExplorer(GitDir, new ChangesExplorer.Options { Kind = _kind })
 			.CreatePanel()
 			.Open();
 	}

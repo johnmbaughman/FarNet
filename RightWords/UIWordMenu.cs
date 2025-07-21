@@ -1,10 +1,6 @@
-﻿
-// FarNet module RightWords
-// Copyright (c) Roman Kuzmin
+﻿using FarNet;
 
-using System.Collections.Generic;
-
-namespace FarNet.RightWords;
+namespace RightWords;
 
 class UIWordMenu
 {

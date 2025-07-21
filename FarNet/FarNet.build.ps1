@@ -4,36 +4,20 @@
 #>
 
 param(
+	[ValidateScript({"FA::FarNet\FarNetApi.build.ps1", "FM::FarNetMan\FarNetMan.build.ps1"})]
+	$Extends,
 	$Platform = (property Platform x64),
-	$Configuration = (property Configuration Release),
-	$TargetFramework = (property TargetFramework net8.0)
-)
-$FarHome = "C:\Bin\Far\$Platform"
-
-$script:Builds = @(
-	'FarNet\.build.ps1'
-	'FarNetMan\.build.ps1'
+	$FarHome = (property FarHome "C:\Bin\Far\$Platform"),
+	$Configuration = (property Configuration Release)
 )
 
-function do-clean {
-	foreach($_ in $Builds) { Invoke-Build clean $_ }
-	remove z, FarNet.sdf, About-FarNet.htm
+task clean FA::clean, FM::clean, {
+	remove z, About-FarNet.htm, FarNetTest\bin, FarNetTest\obj
 }
 
-task clean {
-	do-clean
-}
+task install FA::install, FM::install, helpHLF
 
-task install {
-	foreach($_ in $Builds) {
-		Invoke-Build install $_
-	}
-},
-helpHLF
-
-task uninstall {
-	foreach($_ in $Builds) { Invoke-Build uninstall $_ }
-}
+task uninstall FA::uninstall, FM::uninstall
 
 # Make HLF, called by Build (Install), depends on x64/x86
 task helpHLF -If ($Configuration -eq 'Release') {
@@ -44,7 +28,7 @@ task helpHLF -If ($Configuration -eq 'Release') {
 
 # Make markdown
 task markdown {
-	assert (Test-Path $env:MarkdownCss)
+	requires -Path $env:MarkdownCss
 	exec {
 		pandoc.exe @(
 			'README.md'
@@ -58,22 +42,22 @@ task markdown {
 	}
 }
 
-# Test config and make another platform before packaging
-task beginPackage {
-	# make another platform
-	$bit = if ($Platform -eq 'Win32') {'x64'} else {'Win32'}
+# Synopsis: Make Win32 files.
+task buildWin32 {
+	equals $Platform x64
 
-	#! build just FarNetMan, PowerShellFar is not needed and causes locked files...
+	#! build just FarNetMan
 	exec { & (Resolve-MSBuild) @(
 		"..\FarNet.sln"
 		"/t:restore,FarNetMan"
-		"/p:Platform=$bit"
+		"/p:Platform=Win32"
+		"/p:FarHome=$(Split-Path $FarHome)\Win32"
 		"/p:Configuration=Release"
 	)}
 }
 
 # Make package files
-task package beginPackage, markdown, {
+task package buildWin32, markdown, {
 	# folders
 	remove z
 	$null = mkdir `
@@ -151,4 +135,12 @@ task nuget package, version, {
 "@
 
 	exec { NuGet.exe pack z\Package.nuspec }
+}
+
+task test {
+	Set-Location FarNetTest
+	Use-BuildEnv @{FarNetTest = 1} {
+		exec { dotnet run }
+	}
+	remove bin, obj
 }

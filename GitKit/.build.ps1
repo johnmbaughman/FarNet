@@ -26,15 +26,13 @@ task publish {
 
 	$bit = if ($FarHome -match 'x64') {'win-x64'} elseif ($FarHome -match 'Win32') {'win-x86'} else {throw}
 	Copy-Item -Destination $ModuleRoot @(
-		"$HOME\.nuget\packages\LibGit2Sharp\$ver1\lib\net6.0\LibGit2Sharp.dll"
-		"$HOME\.nuget\packages\LibGit2Sharp\$ver1\lib\net6.0\LibGit2Sharp.xml"
+		"$HOME\.nuget\packages\LibGit2Sharp\$ver1\lib\net8.0\LibGit2Sharp.dll"
+		"$HOME\.nuget\packages\LibGit2Sharp\$ver1\lib\net8.0\LibGit2Sharp.xml"
 		"$HOME\.nuget\packages\LibGit2Sharp.NativeBinaries\$ver2\runtimes\$bit\native\*.dll"
 	)
-
-	remove "$ModuleRoot\GitKit.deps.json"
 }
 
-task help -Inputs README.md -Outputs $ModuleRoot\GitKit.hlf {
+task help -Inputs README.md -Outputs $ModuleRoot\$ModuleName.hlf {
 	exec { pandoc.exe $Inputs --output=README.htm --from=gfm --no-highlight }
 	exec { HtmlToFarHelp from=README.htm to=$Outputs }
 	remove README.htm
@@ -45,11 +43,11 @@ task clean {
 }
 
 task version {
-	($script:Version = switch -regex -file History.txt {'^= (\d+\.\d+\.\d+) =$' {$matches[1]; break}})
+	($Script:Version = Get-BuildVersion History.txt '^= (\d+\.\d+\.\d+) =$')
 }
 
 task markdown {
-	assert (Test-Path $env:MarkdownCss)
+	requires -Path $env:MarkdownCss
 	exec { pandoc.exe @(
 		'README.md'
 		'--output=README.htm'
@@ -91,12 +89,7 @@ task package win32, help, markdown, {
 	Copy-Item $ModuleRoot\git2*.dll $toModule64
 	Copy-Item C:\Bin\Far\Win32\FarNet\Modules\GitKit\git2*.dll $toModule86
 
-	equals 7 @(Get-ChildItem $toModule -Recurse -File).Count
-	equals 1 @(Get-ChildItem $toModule64 -Recurse -File).Count
-	equals 1 @(Get-ChildItem $toModule86 -Recurse -File).Count
-
-	$result = Get-ChildItem z\tools -Recurse -File -Name | Out-String
-	$sample = @'
+	Assert-SameFile.ps1 -Result (Get-ChildItem z\tools -Recurse -File -Name) -Text -View $env:MERGE @'
 FarHome\FarNet\Modules\GitKit\GitKit.dll
 FarHome\FarNet\Modules\GitKit\GitKit.hlf
 FarHome\FarNet\Modules\GitKit\History.txt
@@ -104,10 +97,9 @@ FarHome\FarNet\Modules\GitKit\LibGit2Sharp.dll
 FarHome\FarNet\Modules\GitKit\LibGit2Sharp.xml
 FarHome\FarNet\Modules\GitKit\LICENSE
 FarHome\FarNet\Modules\GitKit\README.htm
-FarHome.x64\FarNet\Modules\GitKit\git2-a418d9d.dll
-FarHome.x86\FarNet\Modules\GitKit\git2-a418d9d.dll
+FarHome.x64\FarNet\Modules\GitKit\git2-3f4182d.dll
+FarHome.x86\FarNet\Modules\GitKit\git2-3f4182d.dll
 '@
-	Assert-SameFile.ps1 -Text $sample $result $env:MERGE
 }
 
 task meta -Inputs .build.ps1, History.txt -Outputs Directory.Build.props -Jobs version, {
@@ -119,18 +111,15 @@ task meta -Inputs .build.ps1, History.txt -Outputs Directory.Build.props -Jobs v
 		<Copyright>Copyright (c) Roman Kuzmin</Copyright>
 		<Product>FarNet.$ModuleName</Product>
 		<Version>$Version</Version>
+		<IncludeSourceRevisionInInformationalVersion>False</IncludeSourceRevisionInInformationalVersion>
 	</PropertyGroup>
 </Project>
 "@
 }
 
 task nuget package, version, {
-	# test versions
-	$dllPath = "$FarHome\FarNet\Modules\$ModuleName\$ModuleName.dll"
-	($dllVersion = (Get-Item $dllPath).VersionInfo.FileVersion.ToString())
-	assert $dllVersion.StartsWith("$Version.") 'Versions mismatch.'
+	equals $Version (Get-Item "$ModuleRoot\$ModuleName.dll").VersionInfo.ProductVersion
 
-	# nuspec
 	Set-Content z\Package.nuspec @"
 <?xml version="1.0"?>
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
@@ -149,12 +138,12 @@ task nuget package, version, {
 	</metadata>
 </package>
 "@
-	# pack
+
 	exec { NuGet pack z\Package.nuspec }
 }
 
 task test {
-	Start-Far "ps: Test.far.ps1 * -Quit" $env:FarNetCode\$ModuleName\Tests -ReadOnly -Title GitKit\test
+	Start-Far "ps: ..\..\Test\Test-FarNet.ps1 * -Quit" .\Tests -ReadOnly
 }
 
 task . build, help, clean

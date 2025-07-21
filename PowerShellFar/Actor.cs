@@ -1,17 +1,10 @@
 
-// PowerShellFar module for Far Manager
-// Copyright (c) Roman Kuzmin
-
 using FarNet;
 using Microsoft.PowerShell;
-using System;
 using System.Collections;
-using System.Collections.Generic;
-using System.IO;
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
-using System.Threading;
-using System.Threading.Tasks;
+using System.Text;
 
 namespace PowerShellFar;
 #pragma warning disable CA1822
@@ -109,10 +102,6 @@ public sealed partial class Actor
 		// release menu
 		UI.ActorMenu.Close();
 
-		// kill remaining jobs
-		//! after menus, before PS
-		Job.StopJobsOnExit();
-
 		// kill host
 		if (FarHost != null)
 		{
@@ -150,10 +139,10 @@ public sealed partial class Actor
 		Commands.BaseCmdlet.AddCmdlets(state);
 
 		// add variables
-		state.Variables.Add(new SessionStateVariableEntry[] {
+		state.Variables.Add([
 			new("Far", Far.Api, "Exposes FarNet.", ScopedItemOptions.AllScope | ScopedItemOptions.Constant),
 			new("Psf", this, "Exposes PowerShellFar.", ScopedItemOptions.AllScope | ScopedItemOptions.Constant),
-		});
+		]);
 
 		// open runspace
 		Runspace = RunspaceFactory.CreateRunspace(FarHost, state);
@@ -169,9 +158,8 @@ public sealed partial class Actor
 		if (!modulePathNow.Contains(modulePathAdd))
 			Environment.SetEnvironmentVariable(Word.PSModulePath, modulePathAdd + modulePathNow);
 
-		//_090315_091325
 		// Get engine once to avoid this: "A pipeline is already executing. Concurrent SessionStateProxy method call is not allowed."
-		// Looks like a hack, but it works fine. Problem case: run Test-CallStack-.ps1, Esc -> the error above.
+		// Looks like a hack, but it works fine. Problem case: run Test-CallStack.ps1, Esc -> the error above.
 		_engine_ = Runspace.SessionStateProxy.PSVariable.GetValue(Word.ExecutionContext) as EngineIntrinsics;
 
 		//? set instead of adding to initial state
@@ -181,7 +169,12 @@ public sealed partial class Actor
 		using var ps = NewPowerShell();
 
 		// internal profile
-		ps.AddCommand($"{A.Psf.AppHome}\\PowerShellFar.ps1", false).Invoke();
+		{
+			using var stream = typeof(Actor).Assembly.GetManifestResourceStream("PowerShellFar.PowerShellFar.ps1");
+			using var reader = new StreamReader(stream!, Encoding.UTF8);
+			var code = reader.ReadToEnd();
+			ps.AddScript(code, false).Invoke();
+		}
 
 		// user profile, run separately for better errors
 		var profile = Entry.RoamingData + "\\Profile.ps1";
@@ -204,7 +197,7 @@ public sealed partial class Actor
 		{
 			var path1 = Environment.GetEnvironmentVariable("FARNET_PSF_START_PANEL1");
 			var path2 = Environment.GetEnvironmentVariable("FARNET_PSF_START_PANEL2");
-			Tasks.ExecuteAndCatch(
+			_ = Tasks.ExecuteAndCatch(
 				() => StartScriptAsync(script, path1, path2),
 				ex => Far.Api.ShowError("Start script error", ex));
 		}
@@ -231,6 +224,8 @@ public sealed partial class Actor
 		}
 		finally
 		{
+			FarHost.Init();
+
 			//! set default runspace for handlers
 			//! it has to be done in main thread
 			Runspace.DefaultRunspace = Runspace;
@@ -318,20 +313,6 @@ public sealed partial class Actor
 	public string AppHome => Path.GetDirectoryName(typeof(Actor).Assembly.Location)!;
 
 	/// <summary>
-	/// Checks whether it is possible to exit the session safely (may require user interaction).
-	/// </summary>
-	/// <returns>true if exit is safe.</returns>
-	/// <remarks>
-	/// If there are background jobs this methods calls <see cref="ShowJobs"/>
-	/// so that you are prompted to remove jobs manually. If you do not remove all the jobs
-	/// then the method returns false.
-	/// <para>
-	/// It can be used to prevent closing of Far by [F10] with existing background jobs.
-	/// </para>
-	/// </remarks>
-	public bool CanExit() => Job.CanExit();
-
-	/// <summary>
 	/// Gets PowerShellFar commands from history.
 	/// </summary>
 	/// <remarks>
@@ -346,7 +327,7 @@ public sealed partial class Actor
 	/// <param name="count">Number of last commands to be returned. 0: all commands.</param>
 	public IList<string> GetHistory(int count)
 	{
-		var lines = History.ReadLines();
+		var lines = HistoryKit.ReadLines();
 		if (count <= 0 || count >= lines.Length)
 			return lines;
 
@@ -393,25 +374,16 @@ public sealed partial class Actor
 	}
 
 	/// <summary>
-	/// Shows the background job list.
-	/// Called on "Background jobs" and by <see cref="CanExit"/>.
-	/// </summary>
-	public void ShowJobs() => Job.ShowJobs();
-
-	/// <summary>
 	/// Shows PowerShell command history.
 	/// Called on "Command history".
 	/// </summary>
 	/// <remarks>
-	/// The selected command is inserted to available known editors.
-	/// Otherwise a new command input box is shown with this command.
+	/// The selected command is invoked or inserted to known editors or command box.
 	/// </remarks>
 	/// <seealso cref="GetHistory"/>
 	public void ShowHistory()
 	{
-		var code = History.ShowHistory();
-		if (code != null)
-			InvokeInputCodePrivate(code);
+		HistoryKit.ShowHistory();
 	}
 
 	/// <summary>
@@ -506,23 +478,34 @@ public sealed partial class Actor
 			FarUI.PushWriter(args.Writer);
 		}
 
+		FarHost.IgnoreApplications? ignoreApplications = null;
 		try
 		{
 			// progress
 			FarUI.IsProgressStarted = false;
 			Far.Api.UI.SetProgressState(TaskbarProgressBarState.Indeterminate);
 
+			// output and apps
+			Command output;
+			if (FarUI.Writer is ConsoleOutputWriter)
+			{
+				output = A.OutDefaultCommand;
+			}
+			else
+			{
+				output = A.OutHostCommand;
+				ignoreApplications = new();
+			}
+
 			// invoke command
 			using var ps = NewPowerShell();
 			_myCommand = code;
 			var command = ps.Commands.AddScript(code, args.UseLocalScope);
-			if (args.Arguments != null)
+			if (args.Arguments is { } arguments)
 			{
-				foreach (var arg in args.Arguments)
-					command.AddArgument(arg);
+				for (int i = 0; i < arguments.Length; ++i)
+					command.AddArgument(arguments[i]);
 			}
-
-			var output = FarUI.Writer is ConsoleOutputWriter ? A.OutDefaultCommand : A.OutHostCommand;
 			command.AddCommand(output);
 			ps.Invoke();
 			args.Reason = ps.InvocationStateInfo.Reason;
@@ -564,7 +547,10 @@ public sealed partial class Actor
 		}
 		finally
 		{
-			// progress
+			// restore apps
+			ignoreApplications?.Dispose();
+
+			// restore progress
 			FarUI.IsProgressStarted = false;
 			Far.Api.UI.SetProgressState(TaskbarProgressBarState.NoProgress);
 
@@ -632,11 +618,13 @@ public sealed partial class Actor
 		EditorKit.InvokeScriptFromEditor(null);
 	}
 
+	bool _isFirstBreakpoint = true;
 	HashSet<LineBreakpoint>? _breakpoints_;
 	internal HashSet<LineBreakpoint> Breakpoints => _breakpoints_ ??= [];
 
 	void OnBreakpointUpdated(object? sender, BreakpointUpdatedEventArgs e)
 	{
+		//! update first
 		if (!string.IsNullOrEmpty(e.Breakpoint.Script))
 		{
 			if (e.Breakpoint is LineBreakpoint bp)
@@ -645,6 +633,18 @@ public sealed partial class Actor
 					Breakpoints.Remove(bp);
 				else
 					Breakpoints.Add(bp);
+			}
+		}
+
+		//! then this with possible exceptions
+		if (_isFirstBreakpoint && e.Breakpoint.Action is null)
+		{
+			_isFirstBreakpoint = false;
+
+			if (!DebuggerKit.HasAnyDebugger(A.Psf.Runspace.Debugger))
+			{
+				DebuggerKit.ValidateAvailable();
+				A.InvokeCode("Add-Debugger.ps1");
 			}
 		}
 	}

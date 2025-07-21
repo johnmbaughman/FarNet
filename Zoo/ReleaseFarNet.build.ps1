@@ -1,17 +1,25 @@
 <#
 .Synopsis
-	Release steps invoked by Invoke-Build *
+	Interactive steps to release FarNet and FarNet.PowerShellFar.
+
+	# simple
+	Invoke-Build *
+
+	# persistent
+	Build-Checkpoint
 #>
 
-#_190903_023748 use PositionalBinding or TabExpansion test fails
-[CmdletBinding(PositionalBinding=$false)]
 param(
+	[ValidateScript({"GH::..\Code.build.ps1", "DC::..\Docs\Docs.build.ps1"})]
+	$Extends,
 	# persistent data
-	$Push,
-	$Tags
+	[Parameter(DontShow=1)]$Push,
+	[Parameter(DontShow=1)]$Tags
 )
 
 Set-Alias ask Confirm-Build
+$RepoRoot = $env:FarNetCode
+requires -Path $RepoRoot
 
 task setVersion -If {
 	ask @'
@@ -19,7 +27,7 @@ Edit Get-Version.ps1 to set versions.
 What you change is what you are about to push.
 '@
 } {
-	Start-Process Far.exe /e, $env:FarNetCode\Get-Version.ps1 -Wait
+	Start-Process Far.exe /e, $RepoRoot\Get-Version.ps1 -Wait
 }
 
 task chooseToPush {
@@ -31,7 +39,7 @@ Choose to push:
 
 '@) -notmatch '^(1|2|3)$') {}
 
-	. $env:FarNetCode\Get-Version.ps1
+	. $RepoRoot\Get-Version.ps1
 	$script:Tags = switch($Push) {
 		1 {"FarNet.$FarNetVersion", "PowerShellFar.$PowerShellFarVersion"}
 		2 {"FarNet.$FarNetVersion"}
@@ -53,22 +61,18 @@ task buildFarNet -If {
 task buildPsfHelp -If {
 	$env:FarNetToBuildPowerShellFarHelp -and (ask 'Build PowerShellFar help')
 } {
-	Start-Far -Test 0 'ps: Invoke-Build help' -Panel1 $env:FarNetCode\PowerShellFar -Title buildPsfHelp
+	Start-Far -Test 0 'ps: Invoke-Build help' -Panel1 $RepoRoot\PowerShellFar -Title buildPsfHelp
 }
 
-task buildDocs -If {
-	($Push -ne 3) -and (ask 'Build FarNet CHM help')
-} {
-	Invoke-Build build, install, clean $env:FarNetCode\Docs\FarNetAPI.build.ps1
-}
+task buildDocs -If {($Push -ne 3) -and (ask 'Build FarNet CHM help')} DC::make
 
 task nugetAndTest -If {
 	ask @'
 Make last changes in docs and notes.
 Create and test NuGet packages?
 '@
-} {
-	Invoke-Build NuGet, TestNuGet
+} GH::nuget, {
+	.\Test-NuGet.ps1
 }
 
 task testAll -If {
@@ -88,14 +92,14 @@ task pushPackages -If {
 task commitSource -If {
 	ask "Start git gui to commit/amend changes for [$Tags]?"
 } {
-	Set-Location $env:FarNetCode
+	Set-Location $RepoRoot
 	git gui
 }
 
 task pushSource -If {
 	ask "Push commits and tags [$Tags]?"
 } {
-	Set-Location $env:FarNetCode
+	Set-Location $RepoRoot
 
 	# push changes
 	exec { git push }
@@ -112,8 +116,20 @@ task pushSource -If {
 	exec { git gc --prune=now }
 }
 
+# before zip
+task clean GH::clean
+
 task zipFarDev -If {
-	ask 'Zip FarDev (checkpoint all)?'
+	ask 'Zip FarDev? // checkpoint Code and maybe related extras'
 } {
-	Invoke-Build zipFarDev
+	. ..\Get-Version.ps1
+	$zip = "FarDev.$FarNetVersion-$PowerShellFarVersion.7z"
+
+	Set-Location ..\..\..
+	requires -Path FarDev
+
+	if (Test-Path $zip) { Remove-Item $zip -Confirm }
+	exec { & 7z.exe a $zip FarDev '-xr!.vs' '-xr!bin' '-xr!obj' '-xr!packages' '-xr!*.clixml' }
 }
+
+task .

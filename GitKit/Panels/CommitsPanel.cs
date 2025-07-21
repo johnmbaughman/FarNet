@@ -1,6 +1,8 @@
 ﻿using FarNet;
+using GitKit.About;
 using GitKit.Commands;
 using LibGit2Sharp;
+using System;
 using System.IO;
 using System.Linq;
 
@@ -11,71 +13,87 @@ class CommitsPanel : BasePanel<CommitsExplorer>
 	public CommitsPanel(CommitsExplorer explorer) : base(explorer)
 	{
 		SortMode = PanelSortMode.Unsorted;
-		ViewMode = 0;
 
 		var settings = Settings.Default.GetData();
 		PageLimit = settings.CommitsPageLimit;
 
 		var cn = new SetColumn { Kind = "N", Name = "Commit" };
-		var cm = new SetColumn { Kind = "DM", Name = "Date" };
 		var co = new SetColumn { Kind = "O", Name = " ", Width = 1 };
 
 		var plan0 = new PanelPlan { Columns = [co, cn] };
 		SetPlan(0, plan0);
 
-		var plan9 = new PanelPlan { Columns = [co, cn, cm] };
-		SetPlan((PanelViewMode)9, plan9);
+		SetView(plan0);
 	}
 
 	protected override string HelpTopic => "commits-panel";
 
-	public Branch Branch => ((CommitsExplorer.BranchCommits)Explorer.Data).Branch;
-
-	void PushBranch()
+	void CompareCommits(string branchName)
 	{
-		PushCommand.PushBranch(Repository, Branch);
-	}
-
-	void CompareCommits()
-	{
-		var (data1, data2) = GetSelectedDataRange<Commit>();
-		if (data2 is null)
+		var (commitSha1, commitSha2) = GetSelectedDataRange(x => (x as CommitFile)?.CommitSha);
+		if (commitSha2 is null)
 			return;
 
-		data1 ??= Branch.Tip;
+		using var repo = new Repository(GitDir);
 
-		var commits = new Commit[] { data1, data2 }.OrderBy(x => x.Author.When).ToArray();
+		var branch = repo.MyBranch(branchName);
 
-		CompareCommits(commits[0], commits[1]);
+		var commit1 = commitSha1 is null ? branch.Tip : repo.Lookup<Commit>(commitSha1);
+		var commit2 = repo.Lookup<Commit>(commitSha2);
+
+		var commits = new Commit[] { commit1, commit2 }.OrderBy(x => x.Author.When).ToArray();
+
+		CompareCommits(commits[0].Sha, commits[1].Sha);
 	}
 
-	void CreateBranch()
+	void CopySha()
 	{
-		if (CurrentFile?.Data is not Commit commit)
+		if (CurrentFile is CommitFile file)
+			UI.CopySha(file.CommitSha, file.Name);
+	}
+
+	void CreateBranch(string branchName)
+	{
+		if (CurrentFile is not CommitFile file)
 			return;
 
-		var friendlyName = Branch.FriendlyName;
 		var settings = Settings.Default.GetData();
-		var hash = commit.Sha[0..settings.ShaPrefixLength];
+		var hash = file.CommitSha[0..settings.ShaPrefixLength];
 		var newName = Far.Api.Input(
 			"New branch name",
 			"GitBranch",
-			$"Create new branch from {friendlyName} {hash}",
-			$"{Path.GetFileName(friendlyName)}-{hash}");
+			$"Create new branch from {branchName} {hash}",
+			$"{Path.GetFileName(branchName)}-{hash}");
 
 		if (string.IsNullOrEmpty(newName))
 			return;
 
-		Repository.CreateBranch(newName, commit);
+		using var repo = new Repository(GitDir);
+
+		var commit = repo.Lookup<Commit>(file.CommitSha);
+		repo.CreateBranch(newName, commit);
+	}
+
+	void PushBranch(string branchName)
+	{
+		if (branchName == Const.NoBranchName)
+			throw new ModuleException($"Cannot push {Const.NoBranchName}.");
+
+		using var repo = new Repository(GitDir);
+
+		var branch = repo.Branches[branchName];
+		PushCommand.PushBranch(repo, branch);
 	}
 
 	internal override void AddMenu(IMenu menu)
 	{
-		if (Explorer.Data is CommitsExplorer.BranchCommits)
+		menu.Add(Const.CopySha, (s, e) => CopySha());
+
+		if (MyExplorer.BranchName is { } branchName)
 		{
-			menu.Add("Push branch", (s, e) => PushBranch());
-			menu.Add("Create branch", (s, e) => CreateBranch());
-			menu.Add("Compare commits", (s, e) => CompareCommits());
+			menu.Add(Const.PushBranch, (s, e) => PushBranch(branchName));
+			menu.Add(Const.CreateBranch, (s, e) => CreateBranch(branchName));
+			menu.Add(Const.CompareCommits, (s, e) => CompareCommits(branchName));
 		}
 	}
 }

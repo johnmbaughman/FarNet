@@ -10,9 +10,9 @@ Far Manager platform for .NET modules and scripts in PowerShell, F#, JavaScript
 
 ## Prerequisites
 
-**.NET 8.0**
+**.NET 9.0**
 
-Download and install [.NET 8.0 SDK or runtime](https://aka.ms/dotnet/download), **x64 or x86 depending on Far Manager**.\
+Download and install [.NET 9.0 SDK or runtime](https://aka.ms/dotnet/download), **x64 or x86 depending on Far Manager**.\
 SDK is needed for developing FarNet modules but recommended in any case.
 
 Check for existing installations by these commands:
@@ -77,6 +77,7 @@ Install-FarPackage FarNet.FolderChart
 Install-FarPackage FarNet.FSharpFar
 Install-FarPackage FarNet.GitKit
 Install-FarPackage FarNet.JavaScriptFar
+Install-FarPackage FarNet.JsonKit
 Install-FarPackage FarNet.PowerShellFar
 Install-FarPackage FarNet.RedisKit
 Install-FarPackage FarNet.RightControl

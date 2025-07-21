@@ -1,25 +1,28 @@
 ﻿using FarNet;
 using GitKit.Panels;
 using LibGit2Sharp;
-using System.Data.Common;
 
 namespace GitKit.Commands;
 
-sealed class CommitsCommand : BaseCommand
+sealed class CommitsCommand(CommandParameters parameters) : BaseCommand(parameters)
 {
-	readonly string? _path;
-
-	public CommitsCommand(DbConnectionStringBuilder parameters) : base(parameters)
-	{
-		_path = GetGitPathOrPath(
-			parameters,
-			returnNullIfRoot: true,
-			validate: path => path == "?" ? Far.Api.FS.CursorPath ?? Far.Api.CurrentDirectory : path);
-	}
+	string? _path = parameters.GetString(Param.Path, ParameterOptions.ExpandVariables);
+	readonly bool _isGitPath = parameters.GetBool(Param.IsGitPath);
 
 	public override void Invoke()
 	{
-		var explorer = _path is null ? new CommitsExplorer(Repository, Repository.Head) : new CommitsExplorer(Repository, _path);
+		using var repo = new Repository(GitDir);
+
+		_path = GetGitPathOrPath(
+			repo,
+			_path,
+			_isGitPath,
+			returnNullIfRoot: true,
+			validate: path => path == "?" ? Far.Api.FS.CursorPath ?? Far.Api.CurrentDirectory : path);
+
+		var explorer = _path is null ?
+			new CommitsExplorer(GitDir, repo.Head.FriendlyName, null) :
+			new CommitsExplorer(GitDir, null, _path);
 
 		explorer
 			.CreatePanel()

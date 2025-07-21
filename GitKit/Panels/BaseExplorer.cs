@@ -1,15 +1,9 @@
 ﻿using FarNet;
-using LibGit2Sharp;
 using System;
 
 namespace GitKit.Panels;
 
-abstract class BaseExplorer : Explorer
+abstract class BaseExplorer(string gitDir, Guid typeId) : Explorer(typeId)
 {
-	public Repository Repository { get; }
-
-	public BaseExplorer(Repository repository, Guid typeId) : base(typeId)
-	{
-		Repository = repository;
-	}
+	public string GitDir => gitDir;
 }

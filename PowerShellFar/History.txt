@@ -1,5 +1,306 @@
 https://www.nuget.org/packages/FarNet.PowerShellFar
 
+= 9.0.39 =
+
+Handle empty paths in StartScriptAsync.
+
+= 9.0.38 =
+
+Use FarNet 9.0.31, fix some ErrorProne issues.
+
+Complete-Word.ps1
+- case sensitive
+- use frequency
+
+ColorerPack
+- powershell.hrc
+
+= 9.0.37 =
+
+Microsoft.PowerShell.SDK 7.5.2
+
+= 9.0.36 =
+
+[F5] in *.build.ps1 editors
+- less blocking ending pause
+
+= 9.0.35 =
+
+FarNet 9.0.28
+
+Edit-IB.ps1
+- Fix opening tasks from dot-sourced files.
+
+= 9.0.34 =
+
+[F5] in Invoke-Build script editor
+- Improve actions on redefined tasks
+- Do not invoke dot-tasks implicitly
+
+Console-like ReadLine input box
+- Fix user screen defects on auto-complete
+
+= 9.0.33 =
+
+Sync path before invoking scripts on completion.
+
+= 9.0.32 =
+
+Debugger and breakpoints UX improvements.
+
+= 9.0.31 =
+
+"Enter-loop" feature, v2
+- loop of commands keeping command line: with caret inside text, use special macro [Enter]
+- see https://github.com/nightroman/FarNet/blob/main/PowerShellFar/PowerShellFar.macro.lua
+
+New macro helper
+- ps:#line-breakpoint -- sets line breakpoint
+
+Command history, like Far "History"
+- [Enter] invokes, [CtrlEnter] inserts
+
+= 9.0.30 =
+
+Enter-loop
+- select the command part
+- add command to session history
+
+= 9.0.28 =
+
+"Enter-loop" experimental feature
+- use special prefix "ps:;" and special macro [Enter] in panels
+
+	ps:; ...
+
+New helper "hash-commands"
+- ps:#invoke -- Invoke selected
+- ps:#history -- Command history
+- ps:#complete -- Complete
+- ps:#enter -- [Enter] in "Enter-loop"
+
+Menu
+- "1. Invoke commands" now shows same dialog in any area
+- "3. Command console" comes back again, for panels only
+
+= 9.0.27 =
+
+Use FarNet 9.0.26
+
+Open-TextLink.ps1
+- fix PS script call stack links
+
+= 9.0.26 =
+
+Debugger
+- on first added breakpoint and no debugger ask to use Add-Debugger
+
+Update-FarManager.ps1
+- support both "msi" and "7z" package types
+- default is "msi", to use built-in msiexec
+
+= 9.0.25 =
+
+Start-FarTask
+- rework task and job script invocations
+- https://github.com/nightroman/FarNet/blob/main/Samples/FarTask/Undocumented.far.ps1
+
+Misc
+- Remove-EmptyString-.ps1 -> Remove-EmptyString.ps1
+- Remove-EndSpace-.ps1 -> Samples/Tests/Test-TrimEnd.ps1
+
+= 9.0.24 =
+
+FarNet 9.0.25, use new quitting helpers.
+https://github.com/nightroman/FarNet/tree/main/Samples/Quit
+
+= 9.0.23 =
+
+FarNet 9.0.24
+
+Allow calling apps from "Profile.ps1", e.g. for doskey macros.
+
+Treat space after `ps:` as echo / no echo.
+
+Edit-Gcm.ps1
+- exclude .com, .cpl, .msc
+
+Misc
+- exclude example profile scripts from "Bench"
+
+= 9.0.22 =
+
+Allow code completion with any `prefix:`.
+
+= 9.0.21 =
+
+New script Edit-Gcm.ps1
+- find, select, edit script or function using Get-Command (gcm)
+
+Edit-IB.ps1
+- minor improvements
+
+Go-Everything.ps1
+- relaxed filter, see help
+
+Above scripts have examples of Lua commands with prefixes.
+
+Misc
+- Select-Bookmark-.ps1 -> Go-Bookmark.ps1
+
+= 9.0.20 =
+
+Microsoft.PowerShell.SDK 7.5.1
+
+Go-Everything.ps1
+- parameter Filter: support ":edit" suffix in addition to substring "edit:"
+
+Search-Regex.ps1
+- use wider dialog
+
+Update-FarManager.ps1
+- support *.map as unused files
+- support not used files in subfolders
+
+= 9.0.19 =
+
+Search-Regex.ps1
+- input shortcut "*..."
+
+Snippet.ps1
+- fix here-string indent
+
+= 9.0.18 =
+
+When calling apps, avoid user screen for vps:, interactive editor, F5 in script editor, etc.
+
+Bench
+- Indent-Selection-.ps1 -> Indent-Selection.ps1
+- Open-TODO-.ps1 -> Panel-TODO.ps1
+
+= 9.0.17 =
+
+Reformat-Selection.ps1
+- tweaks, including PowerShell specific
+
+Bench
+- Go-Head-.ps1 -> Go-HeadFile.ps1
+- Panel-Property-.ps1 -> Panel-ItemProperty.ps1
+- Go-Selection-.ps1 -> Samples\Tests\Test-Go-Selection.ps1
+
+= 9.0.16 =
+
+Merge-Selected.ps1
+- predefined tools, VSCode and WinMerge
+
+Reformat-Selection.ps1
+- without selection use current paragraph
+
+Renamed
+- Show-EditorColor-.ps1 -> Show-EditorColor.ps1
+
+= 9.0.15 =
+
+Panel-DataFrame.ps1 - support Parquet files.
+
+Start-FarTask - tweak help.
+
+= 9.0.14 =
+
+Start-FarTask
+- treat task script parameters the same way in all cases
+
+Misc
+- moved folder "Samples" to the repo root
+- renamed "Generate-Dialog-.ps1" -> "Generate-Dialog.ps1"
+
+= 9.0.13 =
+
+** Start-FarTask new feature and breaking change **
+- jobs use $Var.<name> for getting or setting task variables
+- removed job parameters -Arguments, use $Var.<name> instead
+
+= 9.0.12 =
+
+Start-FarTask
+- task current location is set to the caller file system location
+
+= 9.0.11 =
+
+** Retired Start-FarJob **
+https://github.com/nightroman/FarNet/discussions/64
+
+Search-Regex.ps1
+- Migrate from Start-FarJob to Start-FarTask
+
+Retired scripts
+- Bench/Job-RemoveItem-.ps1
+- Tests/Test-Job-.ps1
+
+= 9.0.10 =
+
+** Start-FarJob will be removed soon **
+
+Improve and simplify Start-FarTask
+- script blocks support dynamic parameters as well as file scripts
+- use one parameter set with optional -AddDebugger and -Step
+
+Register-FarRedisTask.ps1 and Send-FarRedisTask.ps1
+- use default Redis database
+
+Show-Image.ps1
+- fix [Enter]
+
+= 9.0.9 =
+
+Start-FarTask and Assert-Far debugging features use Add-Debugger.ps1 2.4.0
+- Start-FarTask -AddDebugger supports @{} for all defaults.
+
+= 9.0.8 =
+
+Go-Everything.ps1
+- filter supports `edit:`
+
+= 9.0.7 =
+
+Microsoft.PowerShell.SDK 7.5.0
+
+Edit-IB.ps1 - new parameter Task
+
+= 9.0.6 =
+
+Requires FarNet 9.0.10, refactoring.
+
+= 9.0.5 =
+
+Refactor panels.
+
+= 9.0.4 =
+
+Use embedded internal profile.
+
+= 9.0.3 =
+
+Fix completion on null matches.
+
+= 9.0.2 =
+
+Object panel: tweak format cache.
+
+Search-Regex.ps1
+- option Singleline/s implies AllText
+- some tweaks
+
+= 9.0.1 =
+
+Used some new net9.0 features internally.
+
+= 9.0.0 =
+
+Requires .NET 9.0 and FarNet 9.0.0
+
+Uses Microsoft.PowerShell.SDK 7.5.0-rc.1
+
 = 8.1.25 =
 
 FarNet 8.1.14
@@ -85,7 +386,7 @@ Go-Everything.ps1 uses settings instead of env variables.
 = 8.1.11 =
 
 New cmdlets Register-FarCommand, Register-FarDrawer, Register-FarTool.
-See PowerShellFar/Samples/Tests
+See Samples/Tests
 
 = 8.1.10 =
 
@@ -849,7 +1150,7 @@ ArgumentCompleters.ps1 ~ Equals, GetType, ToString.
 
 - add parameter Return to Out-FarPanel
 - add output type attributes to cmdlets
-- work on PowerShellFar/Samples/FarTask
+- work on Samples/FarTask
 
 = 5.3.8 =
 
@@ -875,8 +1176,8 @@ Start-FarTask
 = 5.3.6 =
 
 Add Start-FarTask for async scripts with sync Far jobs and keys.
-Samples: https://github.com/nightroman/FarNet/tree/main/PowerShellFar/Samples/FarTask
-F# tests: https://github.com/nightroman/FarNet/blob/main/FSharpFar/tests/TestPSFar.fs
+Samples: Samples/FarTask
+F# tests: FSharpFar/tests/TestPSFar.fs
 
 = 5.3.5 =
 

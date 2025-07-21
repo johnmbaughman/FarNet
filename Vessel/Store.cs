@@ -1,11 +1,4 @@
 ﻿
-// FarNet module Vessel
-// Copyright (c) Roman Kuzmin
-
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Text;
 
 namespace Vessel;
@@ -15,7 +8,7 @@ public static class Store
 	const string LINE_HEADER = "Time\tWhat\tPath";
 	const string LINE_FORMAT = "{0:yyyy-MM-dd HH:mm:ss}\t{1}\t{2}";
 
-	static readonly object _lock = new();
+	static readonly Lock _lock = new();
 
 	/// <summary>
 	/// Creates the history file and imports the history.

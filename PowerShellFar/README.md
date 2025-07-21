@@ -24,7 +24,6 @@ PowerShell FarNet module for Far Manager
 
 * [Debugging](#debugging)
 * [Commands output](#commands-output)
-* [Background jobs](#background-jobs)
 * [Frequently asked questions][FAQ]
 * [Command and macro examples][Examples]
 
@@ -90,19 +89,18 @@ The white background color scheme *visual.hrd* was designed with PowerShell in m
 
 [Contents]
 
-There are many ways of invoking PowerShell commands in Far Manager, you can
-type and invoke commands at any moment in almost any current context.
+Several ways to invoke PowerShell commands in Far Manager:
 
 **Command line**
 
-Use the Far Manager command line to type and invoke commands with the prefixes
-`ps:` and `vps:`, see [Command line](#command-line).
+Use command line to invoke commands with the prefixes `ps:` and `vps:`, see
+[Command line](#command-line).
 
 **Invoke commands**
 
 Prompts for PowerShell commands: `[F11] \ PowerShellFar \ Invoke commands`.
-In panels: [Command console dialog](#command-console-dialog).
-In other areas: [Invoke commands dialog](#invoke-commands-dialog).
+Panels: [Command console dialog](#command-console-dialog).
+Other areas: [Invoke commands dialog](#invoke-commands-dialog).
 
 **Selected code**
 
@@ -158,8 +156,6 @@ Various event handlers can be added using the profiles or scripts. See
 - Local interactive
 - Remote interactive
 
-`[Del]` in the background job list stops running background jobs.
-
 It is not normally possible to stop commands started from event handlers.
 
 *********************************************************************
@@ -167,11 +163,21 @@ It is not normally possible to stop commands started from event handlers.
 
 [Contents]
 
-Commands with prefixes are used in the command line, user menu, and file
-associations. Command prefixes are:
+Commands with prefixes are used in the command line, user menu, file
+associations, and macros.
+
+Main commands invoking code:
 
 - `ps:` console output and console input
 - `vps:` viewer output and input dialogs
+
+Helper commands for macros:
+
+- `ps:#invoke` calls "Invoke selected"
+- `ps:#history` calls "Command history"
+- `ps:#complete` calls "Complete"
+- `ps:#enter` sends `[Enter]` and keeps command line
+- `ps:#line-breakpoint` sets line breakpoint in the editor
 
 Console output may be transcribed to a file, use `Start-Transcript` and
 `Stop-Transcript` for starting and stopping and `Show-FarTranscript` for
@@ -200,11 +206,10 @@ Commands with no output and input may use any prefix:
 
 See more [Examples].
 
-**Command echo**
+**Command echo rule**
 
-Commands with screen output are printed to the screen before output (echo). But
-if a command ends with "#" then it is not printed. Use this trick in user menu
-and file association commands when echo is not needed.
+Commands with console output print (echo) their text before output if the
+text starts with a space and does not end with "#".
 
 *********************************************************************
 ## Menu commands
@@ -213,27 +218,24 @@ and file association commands when echo is not needed.
 
 **Invoke commands**
 
-You are prompted to enter PowerShell commands.
-
-In panels it works like console with the prompt at the bottom. The prompt is
-shown repeatedly after each command. The output is written to the console.
-See [Command console dialog](#command-console-dialog).
-
-In other areas the enhanced input box is used.
-The output is shown in the viewer.
+Invoke commands from the command box.
+Show the output in viewer.
 See [Invoke commands dialog](#invoke-commands-dialog).
 
 **Invoke selected**
 
-In the editor, dialog, or command line: invoke the selected or the current line
-text. The code is invoked in the global scope with output shown in the viewer.
+In editor, dialog, command line: invoke selected or current line text.
+Show output in viewer or print to console.
 
-In the editor, to invoke the whole script or `Invoke-Build` task, use `[F5]`.
+Editor: to invoke the whole script or `Invoke-Build` task, use `[F5]`.
 
-**Background jobs**
+Command line: commands are added to session history but not saved.
 
-Shows the background jobs menu.
-See [Background jobs menu](#background-jobs-menu).
+**Command console**
+
+Invoke commands from the bottom console-like prompt box.
+Print the output to console and show the prompt again.
+See [Command console dialog](#command-console-dialog).
 
 **Command history**
 
@@ -374,45 +376,6 @@ The output is shown in the viewer.
     Otherwise shows the current command help.
 
 *********************************************************************
-## Background jobs menu
-
-[Contents]
-[Background jobs](#background-jobs)
-
-Shows the background jobs information. Job states:
-
-- Running (`[Del]` stops a job)
-- Stopped (e.g. by `[Del]`)
-- Errors (there is one or more not terminating errors)
-- Failed (there is a terminating error)
-- Completed (there are no errors)
-
-Other information: output data size and a job name or its command text (shortened).
-
-**Keys and actions**
-
-- `[Enter]`
-
-    If there are output data closes the menu and opens a viewer for the output.
-
-- `[F3]`
-
-    The same but you will return to the job menu when you close a viewer.
-
-- `[F5]`
-
-    Refreshes job data shown by this menu.
-
-- `[Del]`
-
-    For a running job, stops it. For a not running job, removes it from the
-    list, discards its output, errors, and deletes temp files, if any.
-
-- `[ShiftDel]`
-
-    Invokes `[Del]` action for each job in the list.
-
-*********************************************************************
 ## Command history
 
 [Contents]
@@ -424,6 +387,10 @@ The history includes Far Manager command and PowerShellFar input dialog historie
 **Keys and actions**
 
 - `[Enter]`
+
+    Invokes the selected command right away.
+
+- `[CtrlEnter]`
 
     Inserts the command to the input line (panels, interactive, command box) or
     shows a new dialog *Invoke commands* dialog with the command text inserted.
@@ -489,6 +456,9 @@ See also [Breakpoint dialog](#breakpoint-dialog).
     from an editor and a line breakpoint already exists at the current editor
     line then you are prompted to remove, enable/disable, modify the existing
     breakpoint or add a new one at the same line.
+
+    NOTE In editor, to set line breakpoints by a key, bind the macro calling
+    `ps:#line-breakpoint`, see `PowerShellFar.macro.lua`.
 
 * Command breakpoint...
 
@@ -648,13 +618,10 @@ This editor is already used for commands output.
 
 **Local and remote sessions (asynchronous)**
 
-Each interactive opens a separate runspace with its private session state:
-provider locations, variables, functions, aliases, and etc.
-
-Commands are invoked asynchronously in background threads, so that console
-editors and Far itself are not blocked: you can switch to panels or another
-editors while a command is running. Moreover, you can open several async
-consoles, invoke parallel commands and still continue other work in Far.
+Each interactive opens a separate runspace with its own session state:
+provider locations, variables, functions, aliases, and etc. Commands are
+invoked asynchronously, UI is not blocked, you can switch to other windows
+while commands are running.
 
 Limitations of asynchronous interactives:
 
@@ -954,8 +921,8 @@ current panel item names without full paths.
 ---
 **How to open item or property panel at some location**
 
-If you want to open a panel at the specified location from a script you may use
-scripts *Go-To.ps1* (not for *FileSystem*) and *Panel-Property-.ps1* (for any
+If you want to open a panel at the specified location from a script you may
+use scripts *Go-To.ps1* (not *FileSystem*) and *Panel-ItemProperty.ps1* (any
 provider). See comments and examples there.
 
 *********************************************************************
@@ -1209,32 +1176,25 @@ There are three main objects defined as global variables.
 
 [Contents]
 
-PowerShellFar is configured via profiles with special names in the directory
-*%FARPROFILE%\FarNet\PowerShellFar*. Each profile is invoked on the relevant
-event, once for its session. Profiles are invoked in a session global scope.
+PowerShellFar is configured by profiles in `%FARPROFILE%\FarNet\PowerShellFar`.
+Profile are invoked once per their session, when needed, in the global scope.
 
-Supported profiles:
+Used profiles:
 
-- *Profile.ps1*
-- *Profile-Editor.ps1*
-- *Profile-Local.ps1*
-- *Profile-Remote.ps1*
+- `Profile.ps1`
+- `Profile-Editor.ps1`
+- `Profile-Local.ps1`
+- `Profile-Remote.ps1`
 
 ---
 **Profile.ps1**
 
-It is the main session profile invoked once on loading PowerShellFar.
+It is the main session profile invoked on loading. A separate thread is used
+to make loading faster. This introduces some limitations:
 
-For faster startup, this profile is invoked in the background.
-This introduces some limitations, actually easy to deal with:
-
-* Do not call `$Far`. The profile is only for initialisation of the session,
-  not for doing any work.
-* Do not add editor event handlers in the main profile, use the editor profile
-  *Profile-Editor.ps1*.
-* Profile errors are not shown on loading (background). Terminating error are
-  shown on the first command. For non-terminating errors examine the variable
-  `$Error` after loading.
+- FarNet API calls except some basic thread safe should be avoided.
+- Terminating errors are not shown until any command run after loading.
+- For non-terminating errors examine the variable `$Error` after loading.
 
 Example: [Profile.ps1](#profileps1)
 
@@ -1253,7 +1213,7 @@ They are session profiles invoked on opening local and remote interactives,
 once per each new session. The remote profile code is taken from the local
 script but it is invoked in a remote workspace.
 
-Non terminating profile errors are not shown. A terminating error is shown in a
+Non-terminating profile errors are not shown. A terminating error is shown in a
 standard message box with a bare error message. Examine the variable `$Error`
 in opened interactives for full error information.
 
@@ -1324,38 +1284,6 @@ errors are ignored but collected in the global variable `$Error`. Warnings are
 ignored.
 
 *********************************************************************
-## Background jobs
-
-[Contents]
-
-Background jobs are started from the command line or scripts by the cmdlet
-`Start-FarJob`, see its help for details and *Test-Job-.ps1* for examples.
-
-**Rules**
-
-Objects `$Far` and `$Psf` are not exposed for jobs and they should not be
-accessed in other ways because this is not thread safe.
-
-Jobs should not rely on the process current directory, while they are working
-it can change externally. Jobs should not change the current directory, too.
-But the PowerShell current location is totally up to a job, i.e. the command
-`Set-Location` is safe and this job location is not used or changed outside.
-
-Jobs must not be interactive in any way. But you can perform the interactive
-part in the main session (data input and validation with error messages) and
-then, having all data ready, start the job. Example: *Job-RemoveItem-.ps1*
-
-**Notes**
-
-If you close Far and jobs still exist then for any job you are prompted to
-abort, wait for exit, view output or discard all jobs and output. It is done
-with GUI message boxes and external editors because on exiting Far UI is not
-available.
-
-If it is not enough then there is another way to choose how to proceed with
-jobs. The macro `[F10]` can get control of exit in panels: see [Examples].
-
-*********************************************************************
 ## Suffixes
 
 [Contents]
@@ -1407,19 +1335,26 @@ one of the associated commands.
 
 [Contents]
 
-The main session profile: *%FARPROFILE%\FarNet\PowerShellFar\Profile.ps1*
+The main session profile: `%FARPROFILE%\FarNet\PowerShellFar\Profile.ps1`
 
-*Bench\Profile.ps1* is an example, use it as the base for your own.
+Example: [Profile.ps1](https://github.com/nightroman/FarNet/blob/main/PowerShellFar/Profile.ps1)
 
-**Profile details**
+---
+
+    # Macros
+    doskey ib=ps:Invoke-Build
+    doskey ?=ps:Invoke-Build ?
+
+Define convenient doskey macros.
 
 ---
 
     # Aliases
-    Set-Alias pp Get-FarPath -Description 'Get panel paths'
+    Set-Alias op Out-FarPanel
+    Set-Alias pp Get-FarPath
     ...
 
-Define some convenient command aliases.
+Define convenient command aliases.
 
 ---
 
@@ -1442,10 +1377,9 @@ properties `Providers` (class `Actor`), `Columns` (class `ItemPanel`).
 
 [Contents]
 
-The editor profile: *%FARPROFILE%\FarNet\PowerShellFar\Profile-Editor.ps1*.
+The editor profile: `%FARPROFILE%\FarNet\PowerShellFar\Profile-Editor.ps1`
 
-*Bench\Profile-Editor.ps1* is an example, use it as the base for your own.
-Do not just copy this script, it may not work well in your environment.
+Example: [Profile-Editor.ps1](https://github.com/nightroman/FarNet/blob/main/PowerShellFar/Profile-Editor.ps1)
 
 The author uses this profile to set some editor event handlers even when macros
 might work better. This is done deliberately in order to be sure that handlers
@@ -1502,9 +1436,9 @@ All you need is to call the script once, normally in a host profile.
 
 [Contents]
 
-The script searches for the specified regex or simple match in the input files
-and sends found matches to the panel, where you can open the editor at the
-found matches selected.
+The script searches for the specified regex or simple match in the input
+files and sends found matches to the panel, where you can open the editor
+with the caret at the found match.
 
 The search is performed in the background and results are sent to the panel.
 You may work with results immediately even with the search still running.
@@ -1523,7 +1457,7 @@ with other options.
 
 - Options
 
-    Comma delimited regular expression and extra options or their aliases.
+    Comma or space delimited regular expression options or their aliases.
 
     Standard .NET regular expression options and aliases:
     `None`, `IgnoreCase/ic`, `Multiline/m`, `ExplicitCapture/ec`, `Compiled`,
@@ -1533,27 +1467,23 @@ with other options.
     Extra helper options: `SimpleMatch/sm` tells that the pattern is literal
     string, `WholeWord/ww` tells to search for word bounds, i.e. `\b...\b`.
 
+    Note that the option `Singleline/s` implies "All text".
+
 - Input
 
     Any command returning file paths or file system items.
     Missing paths and directory paths or items are ignored.
 
+    If the text starts with `*` then it is translated as
+    `"Get-ChildItem . -Force -Recurse -Include $text"`
+
 - All text
 
     Tells to read and process files as whole strings, not lines. In this case
-    the options `Multiline` and `Singleline` may be useful as well. Results are
-    processed in the same way but found matches are not selected in the editor,
-    only the caret is set at the beginning.
+    options `Multiline` and `Singleline` may be useful. Found matches are not
+    selected in the editor, just the caret set to starts.
 
-- Background input
-
-    By default an input command is invoked in the main runspace, it can use
-    defined variables, commands, and etc. If a command actually does not need
-    this and it is going to take long time itself, `dir C:\ -Recurse -Include
-    *.txt`, then it is more effective to run it in the background by setting
-    this flag.
-
----
+***
 **Result panel keys**
 
 * `[Enter]` - open the editor at the selected match.
@@ -1565,53 +1495,37 @@ with other options.
 
 Search in .ps1 files in the current directory:
 
-    dir . -Include *.ps1
+    dir *.ps1
 
-The same but with all sub-directories:
+The same with sub-directories:
 
     dir . -Include *.ps1 -Recurse
 
-The above command are fine for background input, they do not use anything from
-the current session. Commands below cannot be used for background input. But
-they create some useful inputs using cmdlets and API.
-
-To search in all or selected panel items, especially useful in the temp panel:
+To search in all or selected panel items, useful in temp panels:
 
     Get-FarPath -All
     Get-FarPath -Selected
 
-To search in the editor history files:
-
-    $Far.History.Editor() | % Name
-
-The above command is just an example. Its improved version is provided by the
-script built-in utility `Get-EditorHistory` which returns recent files first
-and excludes network paths (the search may take ages if there are missing).
-In other words, use this command:
+To search in the editor history (recent files first, excluded network paths):
 
     Get-EditorHistory
 
----
+***
 **Command line mode**
 
 The script is started with no dialog if the parameter `Regex` is defined. In
 this case options are also defined in the command and input items are either
-piped to the script or specified by the parameter `InputObject`. If it is a
-script block then it is invoked in the background for getting input items.
+piped to the script or specified by `InputObject`.
 
 Example:
 
-    ls *.ps1 | Search-Regex.ps1 TODO IgnoreCase, WholeWord
+    dir *.ps1 | Search-Regex.ps1 TODO ic, ww
 
-Ditto but items are collected in the background:
-
-    Search-Regex.ps1 TODO IgnoreCase, WholeWord {ls *.ps1}
-
----
+***
 **Developer notes**
 
-The script demonstrates useful techniques of using background jobs for
-processing and panels for displaying results and further operations.
+The script demonstrates using `Start-FarTask` for background jobs and using
+panels for displaying job results and further operations on them.
 
 *********************************************************************
 ## Frequently asked questions

@@ -1,44 +1,59 @@
---[[
-    Sample macros for some PowerShellFar commands.
-    *USE YOUR OWN MACROS, THIS IS JUST AN EXAMPLE*
-]]
 
+-- Insert "ps: " to empty command line
 Macro {
-  area="Shell"; key="Space"; description="PSF: Easy prefix";
-  flags="EmptyCommandLine";
+  key="Space"; description="PSF: Easy prefix";
+  area="Shell"; flags="EmptyCommandLine";
   action=function()
     Keys "p s : Space"
   end;
 }
 
+-- With "ps:" and caret inside, invoke and keep command
 Macro {
-  area="Shell"; key="F10"; description="PSF: Quit Far";
+  key="Enter"; description="PSF: Invoke and keep command";
+  area="Shell ShellAutoCompletion Info QView Tree"; flags="NotEmptyCommandLine";
+  condition=function()
+    return not CmdLine.Eof and CmdLine.Value:sub(1, 3) == "ps:"
+  end;
   action=function()
-    if not Plugin.Call("10435532-9BB3-487B-A045-B0E6ECAAB6BC", [[vps:$Far.Quit()]]) then Keys "F10" end
+    if Area.ShellAutoCompletion then Keys "Esc" end
+    Plugin.SyncCall("10435532-9BB3-487B-A045-B0E6ECAAB6BC", [[:ps:#invoke]])
   end;
 }
 
+-- PowerShell command history
 Macro {
-  area="Common"; key="AltF10"; description="PSF: Command history";
+  key="AltF10"; description="PSF: Command history";
+  area="Common";
   action=function()
-    Plugin.Call("10435532-9BB3-487B-A045-B0E6ECAAB6BC", [[vps:$Psf.ShowHistory()]])
+    if Area.DialogAutoCompletion or Area.ShellAutoCompletion then Keys "Esc" end
+    Plugin.SyncCall("10435532-9BB3-487B-A045-B0E6ECAAB6BC", [[ps:#history]])
   end;
 }
 
+-- PowerShell line breakpoint
 Macro {
-  key="F9"; description="PSF: TabExpansion";
+  key="CtrlF9"; description="PSF: Line breakpoint";
+  area="Editor"; filemask = "*.ps1,*.psm1";
+  action=function()
+    Plugin.SyncCall("10435532-9BB3-487B-A045-B0E6ECAAB6BC", [[ps:#line-breakpoint]])
+  end;
+}
+
+-- Complete PowerShell code
+Macro {
+  key="F9"; description="PSF: Complete";
   area="Dialog Editor Shell QView Tree Info DialogAutoCompletion ShellAutoCompletion";
   condition=function()
     return Area.Dialog or Area.Editor or Area.DialogAutoCompletion or Area.ShellAutoCompletion or not CmdLine.Empty
   end;
   action=function()
     if Area.DialogAutoCompletion or Area.ShellAutoCompletion then Keys "Esc" end
-    if Plugin.Menu("10435532-9BB3-487B-A045-B0E6ECAAB6BC", "7DEF4106-570A-41AB-8ECB-40605339E6F7") then
-      Keys "7"
-    end
+    Plugin.SyncCall("10435532-9BB3-487B-A045-B0E6ECAAB6BC", [[ps:#complete]])
   end;
 }
 
+-- Invoke "Complete-Word.ps1"
 Macro {
   key="CtrlSpace"; description="PSF: Complete-Word.ps1";
   area="Dialog Editor Shell QView Tree Info DialogAutoCompletion ShellAutoCompletion";
@@ -47,6 +62,16 @@ Macro {
   end;
   action=function()
     if Area.DialogAutoCompletion or Area.ShellAutoCompletion then Keys "Esc" end
-    Plugin.Call("10435532-9BB3-487B-A045-B0E6ECAAB6BC", [[vps:Complete-Word.ps1]])
+    Plugin.SyncCall("10435532-9BB3-487B-A045-B0E6ECAAB6BC", [[vps:Complete-Word.ps1]])
+  end;
+}
+
+-- Clear, enter, restore
+Macro {
+  key="ShiftEsc"; description="PSF: Clear, enter, restore";
+  area="Shell ShellAutoCompletion Info QView Tree"; flags="NotEmptyCommandLine";
+  action=function()
+    if Area.ShellAutoCompletion then Keys "Esc" end
+    Plugin.SyncCall("10435532-9BB3-487B-A045-B0E6ECAAB6BC", [[ps:#enter]])
   end;
 }
