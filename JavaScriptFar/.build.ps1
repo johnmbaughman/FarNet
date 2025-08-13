@@ -33,7 +33,7 @@ task build meta, {
 }
 
 task clean {
-	remove z, bin, obj, README.htm, *.nupkg
+	remove z, bin, obj, README.html, *.nupkg
 }
 
 task version {
@@ -44,7 +44,7 @@ task markdown {
 	requires -Path $env:MarkdownCss
 	exec { pandoc.exe @(
 		'README.md'
-		'--output=README.htm'
+		'--output=README.html'
 		'--from=gfm'
 		'--embed-resources'
 		'--standalone'
@@ -68,7 +68,7 @@ task package markdown, {
 
 	# about
 	Copy-Item -Destination $toModule @(
-		'README.htm'
+		'README.html'
 		'History.txt'
 		'..\LICENSE'
 	)
@@ -84,7 +84,7 @@ JavaScriptFar.deps.json
 JavaScriptFar.dll
 LICENSE
 Newtonsoft.Json.dll
-README.htm
+README.html
 runtimes\win-x64\native\ClearScriptV8.win-x64.dll
 runtimes\win-x86\native\ClearScriptV8.win-x86.dll
 '@
@@ -117,7 +117,7 @@ task nuget package, version, {
 }
 
 task test {
-	Start-Far "ps: ..\..\Test\Test-FarNet.ps1 * -Quit" .\Tests -ReadOnly
+	Start-Far "ps: Test-FarNet *" .\Tests -Exit 999
 }
 
 task . build, clean

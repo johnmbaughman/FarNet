@@ -30,22 +30,21 @@ Input:
 
 Example:
 
-    HtmlToFarHelp from=Manual.htm to=Manual.hlf
-    HtmlToFarHelp "to = Manual.hlf; from = Manual.htm"
+    HtmlToFarHelp from=Manual.html to=Manual.hlf
+    HtmlToFarHelp "to = Manual.hlf; from = Manual.html"
 
 ## Description
 
 The tool is supposed to be used with Markdown converters like [Pandoc]. Compose
-manuals in Markdown, convert to HTML by a converter and then convert to HLF by
-HtmlToFarHelp.
+in Markdown, convert it to HTML and then convert HTML to HLF by HtmlToFarHelp.
 
 It is fine to compose in HTML and convert to HLF. But this is not recommended
-due to the limited subset of supported HTML and not documented or stable rules.
+due to some HTML elements not supported and not documented or stable rules.
 
 ### Conversion options
 
 Conversion options are specified as HTML comments in the source Markdown or
-HTML. Here is the example with all available keys and default values:
+HTML. The example with all available keys and default values:
 
     <!--HLF:
         Language = English,English;
@@ -89,9 +88,9 @@ Example:
     <!--reset options to global-->
     <!--HLF:-->
 
-`ListBullet` is one one more space separated strings used as list item bullet
-symbols. Positions correspond to list item depths. The last string is used for
-all deeper levels.
+`ListBullet` is one or more space separated strings used as list bullets.
+Positions correspond to list item depths. The last string is used for all
+deeper levels.
 
 `ListItemEmptyLine` tells to use an empty line between list items.
 
@@ -118,17 +117,18 @@ headings change `TopicHeading`. For example, if it is set to `h2` then headings
 
 HTML may be produced by this command:
 
-    pandoc MyHelp.md --output MyHelp.htm --from=gfm
+    pandoc MyHelp.md --output MyHelp.html --from=gfm
 
 To keep line breaks similar to source, use `--wrap=preserve`. This should not
 affect HLF help rendering but may be useful for HLF inspection in the editor.
 
-Use `--no-highlight` to disable syntax highlighting for code blocks, if you use
-language attributes. HtmlToFarHelp does not support syntax highlighted blocks.
+For making just HLF use `--no-highlight` to disable code blocks syntax
+highlighting as not needed. For making HTML and HLF highlighting may be
+preserved.
 
-To make HTML for documentation, use `--standalone` and define the page title as
-`--metadata=pagetitle:MyHelp`. If code blocks have language attributes, a
-separate command without `--no-highlight` is needed.
+To make HTML for documentation, use `--standalone` and set the page title
+`--metadata=pagetitle:MyTitle`. If this HTML is used for HLF then set
+language `--metadata=lang:en` to fix invalid XML in some cases.
 
 GFM advantages:
 
@@ -153,7 +153,7 @@ available at that time.
 
 The recommended converter is [Pandoc]:
 
-    pandoc MyHelp.md --output MyHelp.htm --from=markdown_phpextra
+    pandoc MyHelp.md --output MyHelp.html --from=markdown_phpextra
 
 Pandoc `markdown_phpextra` comparison with obsolete MarkdownDeep:
 
@@ -166,15 +166,15 @@ Pandoc `markdown_phpextra` comparison with obsolete MarkdownDeep:
 The package directory *Demo* contains:
 
 - *README.md*: Markdown sample with features and test cases.
-- *README.htm*: HTML file created from *README.md* by *Pandoc*.
-- *README.hlf*: HLF file created from *README.htm* by *HtmlToFarHelp*.
+- *README.html*: HTML file created from *README.md* by *Pandoc*.
+- *README.hlf*: HLF file created from *README.html* by *HtmlToFarHelp*.
 - *Convert-MarkdownToHelp.ps1*: Demo script used for the above conversions.
 
 ## Tools
 
 The FarNet module PowerShellFar comes with HLF utility scripts:
 
-- *Show-Markdown.ps1* is used for opening the HLF viewer at the current topic
+- *Show-FarMarkdown.ps1* is used for opening the HLF viewer at the current topic
   from the editor with .md or .text files. In other words, on composing HLF in
   Markdown you may preview result help topics.
 - *Show-Hlf.ps1* is used for opening the HLF viewer at the current topic from
@@ -183,7 +183,6 @@ The FarNet module PowerShellFar comes with HLF utility scripts:
 ## See also
 
 - [HtmlToFarHelp Release Notes](https://github.com/nightroman/FarNet/blob/main/HelpDown/HtmlToFarHelp/Release-Notes.md)
-<!---->
 - [GitHub Flavored Markdown](https://github.github.com/gfm/)
 - [PHP Markdown Extra](https://michelf.ca/projects/php-markdown/extra/)
 - [Pandoc User's Guide](https://pandoc.org/MANUAL.html)

@@ -13,7 +13,7 @@ $ModuleName = "PowerShellFar"
 $ModuleRoot = "$FarHome\FarNet\Modules\$ModuleName"
 
 task clean {
-	remove z, bin, obj, About-PowerShellFar.htm
+	remove z, bin, obj, About-PowerShellFar.html
 }
 
 # Install all. Run after Build.
@@ -24,23 +24,18 @@ task uninstall {
 }
 
 task markdown {
-	# HLF
-	exec { pandoc.exe README.md --output=About-PowerShellFar.htm --from=gfm --no-highlight }
-	exec { HtmlToFarHelp from=About-PowerShellFar.htm to=$ModuleRoot\PowerShellFar.hlf }
-
-	# HTM
 	requires -Path $env:MarkdownCss
-	exec {
-		pandoc.exe @(
-			'README.md'
-			'--output=About-PowerShellFar.htm'
-			'--from=gfm'
-			'--embed-resources'
-			'--standalone'
-			"--css=$env:MarkdownCss"
-			'--metadata=pagetitle:PowerShellFar'
-		)
-	}
+	exec { pandoc.exe @(
+		'README.md'
+		'--output=About-PowerShellFar.html'
+		'--from=gfm'
+		'--standalone'
+		'--embed-resources'
+		"--css=$env:MarkdownCss"
+		'--metadata=lang:en'
+		'--metadata=pagetitle:PowerShellFar'
+	)}
+	exec { HtmlToFarHelp.exe from=About-PowerShellFar.html "to=$ModuleRoot\PowerShellFar.hlf" }
 }
 
 task installBin {
@@ -89,7 +84,7 @@ task package markdown, {
 
 	Copy-Item -Destination $toModule -Recurse -Force @(
 		"Bench"
-		"About-PowerShellFar.htm"
+		"About-PowerShellFar.html"
 		"History.txt"
 		"..\LICENSE"
 		"PowerShellFar.macro.lua"

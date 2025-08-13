@@ -1,6 +1,15 @@
 ﻿https://www.nuget.org/packages/FarNet
 Far Manager 3.0.5505
 
+= 9.0.34 =
+
+Bench/Start-Far.ps1
+- move processing from PSF to FarNet
+
+= 9.0.33 =
+
+Tweaks for Start-Far.ps1
+
 = 9.0.32 =
 
 Simplify Disposable helper.
@@ -794,8 +803,6 @@ Add optional EditorOpened handler to EditTextArgs and GetContentEventArgs.
 
 Remove obsolete EditText(string, string), use EditText(EditTextArgs).
 
-About-FarNet.htm - use GitHub like CSS.
-
 = 5.2.21 =
 
 unlisted
@@ -1307,10 +1314,6 @@ Panel
 = 5.0.15 =
 
 Far 3.0.2479 (settings API)
-
-* About
-- Replaced "Readme.txt" with "About-FarNet.htm" which is generated from the
-same source as "FarNetMan.hlf".
 
 * Far settings
 - Added IFar.GetSetting()

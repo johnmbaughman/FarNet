@@ -190,17 +190,6 @@ public sealed partial class Actor
 				throw new ModuleException($"Profile.ps1 error: {ex.Message}", ex);
 			}
 		}
-
-		// start script
-		var script = Environment.GetEnvironmentVariable("FARNET_PSF_START_SCRIPT");
-		if (script is not null)
-		{
-			var path1 = Environment.GetEnvironmentVariable("FARNET_PSF_START_PANEL1");
-			var path2 = Environment.GetEnvironmentVariable("FARNET_PSF_START_PANEL2");
-			_ = Tasks.ExecuteAndCatch(
-				() => StartScriptAsync(script, path1, path2),
-				ex => Far.Api.ShowError("Start script error", ex));
-		}
 	}
 
 	/// <summary>
@@ -514,7 +503,7 @@ public sealed partial class Actor
 		}
 		catch (Exception reason)
 		{
-			if (FarNet.Works.Test.IsTestCommand)
+			if (FarNet.Works.ExitManager.IsExiting)
 				throw;
 
 			args.Reason = reason;

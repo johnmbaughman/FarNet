@@ -1,5 +1,42 @@
 https://www.nuget.org/packages/FarNet.PowerShellFar
 
+= 9.0.44 =
+
+Use FarNet 9.0.34
+
+Rework Bench/Start-Far.ps1
+- Processed by FarNet, PSF is not not needed.
+- Replaced Test, Timeout, Quit with new Exit.
+- Renamed Panel1 -> Path, Panel2 -> Path2.
+- New parameter Active (Left/Right).
+
+= 9.0.43 =
+
+Use FarNet 9.0.33
+
+Start-Far.ps1
+- Tweaks and docs.
+
+= 9.0.42 =
+
+Start-Far.ps1
+- Set panels by native Far arguments, avoid unwanted effects.
+
+= 9.0.41 =
+
+Bench/Show-FarMarkdown.ps1
+- Simplify navigation to the current editor heading in the browser.
+
+= 9.0.40 =
+
+Bench/Show-Markdown.ps1 -> Show-FarMarkdown.ps1
+- Rename to avoid conflict with `Microsoft.PowerShell.Utility\Show-Markdown`.
+- Remove $env:MarkdownBrowser, it was a workaround now done differently.
+- Use Show-FarMarkdown.* for temp files.
+
+New Bench/Panel-README.ps1
+- Shows folder tree for exploring README.md files.
+
 = 9.0.39 =
 
 Handle empty paths in StartScriptAsync.
@@ -1239,10 +1276,6 @@ Show-Markdown-.ps1
 Search-Regex-.ps1
 - built-in command Get-EditorHistory, to search in editor history files
 
-About-PowerShellFar
-- reworked some pieces, including out of date
-- GitHub like CSS in About-PowerShellFar.htm
-
 Module
 - fixed removal of finished background jobs
 
@@ -2216,10 +2249,6 @@ Select-Bookmark-.ps1 adapted to FarNet changes.
 Search-FarFile checks masks for validity.
 
 = 5.0.15 =
-
-* About
-- Replaced "Readme.txt" with "About-PowerShellFar.htm" which is generated from
-the same source as "PowerShellFar.hlf".
 
 * Markdown & markdown help tools
 - Requires HelpDown
